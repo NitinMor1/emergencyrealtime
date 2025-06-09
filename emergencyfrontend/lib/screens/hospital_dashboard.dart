@@ -198,9 +198,10 @@ class _HospitalDashboardState extends State<HospitalDashboard>
             itemCount: emergencyRequests.length,
             itemBuilder: (context, index) {
               final request = emergencyRequests[index];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: EmergencyRequestCard(request: request),
+              return EmergencyRequestCard(
+                request: request,
+                onViewDetails: () => _viewEmergencyDetails(request),
+                onAccept: () => _acceptEmergency(request),
               );
             },
           ),
@@ -369,25 +370,91 @@ class _HospitalDashboardState extends State<HospitalDashboard>
     }
   }
 
-  void _acceptEmergency(EmergencyRequest request, String ambulanceId) {
+  void _acceptEmergency(EmergencyRequest request) {
     final emergencyProvider = Provider.of<EmergencyProvider>(
       context,
       listen: false,
     );
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
-    emergencyProvider.acceptEmergency(
-      emergencyId: request.emergencyId,
-      hospitalId: authProvider.currentUser!.hospitalId!,
-      ambulanceId: ambulanceId,
-    );
+    // Check if we have available ambulances
+    final availableAmbulances =
+        emergencyProvider.ambulances
+            .where((ambulance) => ambulance.status == AmbulanceStatus.available)
+            .toList();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Emergency ${request.emergencyId} accepted'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    if (availableAmbulances.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No available ambulances'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // If only one ambulance, accept immediately
+    if (availableAmbulances.length == 1) {
+      emergencyProvider.acceptEmergency(
+        emergencyId: request.emergencyId,
+        hospitalId: authProvider.currentUser!.hospitalId!,
+        ambulanceId: availableAmbulances.first.ambulanceId,
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Emergency ${request.emergencyId} accepted'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      // Show dialog to select ambulance
+      showDialog(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Select Ambulance'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: availableAmbulances.length,
+                  itemBuilder: (context, index) {
+                    final ambulance = availableAmbulances[index];
+                    return ListTile(
+                      leading: const Icon(Icons.local_shipping),
+                      title: Text(ambulance.vehicleNumber),
+                      subtitle: Text(ambulance.driverName),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        emergencyProvider.acceptEmergency(
+                          emergencyId: request.emergencyId,
+                          hospitalId: authProvider.currentUser!.hospitalId!,
+                          ambulanceId: ambulance.ambulanceId,
+                        );
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Emergency ${request.emergencyId} accepted',
+                            ),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ),
+      );
+    }
   }
 
   void _viewEmergencyDetails(EmergencyRequest request) {

@@ -1596,6 +1596,61 @@ class EmergencyProvider extends ChangeNotifier {
     }
   }
 
+  void _handleNewEmergencyRequest(WebSocketMessage message) {
+    try {
+      debugPrint('🚨 Processing new emergency request');
+      debugPrint('📋 Message data: ${message.data}');
+
+      // Handle both direct emergency data and nested emergency data
+      Map<String, dynamic> emergencyData;
+      if (message.data.containsKey('data')) {
+        emergencyData = message.data['data'] as Map<String, dynamic>;
+      } else {
+        emergencyData = message.data;
+      }
+
+      // Ensure required fields have default values
+      final modifiedData =
+          Map<String, dynamic>.from(emergencyData)
+            ..putIfAbsent(
+              'emergencyId',
+              () => 'emergency_${DateTime.now().millisecondsSinceEpoch}',
+            )
+            // Use the JsonValue string directly instead of enum.name
+            ..putIfAbsent('status', () => 'pending') // Changed from 'requested'
+            ..putIfAbsent('requestTime', () => DateTime.now().toIso8601String())
+            ..putIfAbsent('emergencyType', () => 'medical');
+
+      debugPrint('📋 Modified emergency data: $modifiedData');
+
+      final request = EmergencyRequest.fromJson(modifiedData);
+
+      // Check if we already have this emergency request
+      final existingIndex = _emergencyRequests.indexWhere(
+        (existing) => existing.emergencyId == request.emergencyId,
+      );
+
+      if (existingIndex != -1) {
+        // Update existing request
+        _emergencyRequests[existingIndex] = request;
+        debugPrint(
+          '✅ Updated existing emergency request: ${request.emergencyId}',
+        );
+      } else {
+        // Add new request
+        _emergencyRequests.add(request);
+        debugPrint('✅ Added new emergency request: ${request.emergencyId}');
+      }
+
+      notifyListeners();
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error handling emergency request: $e');
+      debugPrint('Stack trace: $stackTrace');
+      debugPrint('❌ Message data: ${message.data}');
+      _setError('Failed to process emergency request: ${e.toString()}');
+    }
+  }
+
   void _handleEmergencyAlert(WebSocketMessage message) {
     try {
       debugPrint('🚨 Handling emergency alert');
@@ -1623,10 +1678,8 @@ class EmergencyProvider extends ChangeNotifier {
               'requestTime',
               () => timestamp,
             ) // Use timestamp for requestTime
-            ..putIfAbsent(
-              'status',
-              () => EmergencyStatus.requested.name,
-            ) // Default status
+            // Use the JsonValue string directly instead of enum.name
+            ..putIfAbsent('status', () => 'pending') // Default status
             ..['timestamp'] = timestamp; // Ensure timestamp is DateTime
 
       debugPrint('📋 Modified emergency data: $modifiedData');
@@ -1653,46 +1706,6 @@ class EmergencyProvider extends ChangeNotifier {
       debugPrint('❌ Error handling emergency alert: $e');
       debugPrint('Stack trace: $stackTrace');
       _setError('Failed to process emergency alert: ${e.toString()}');
-    }
-  }
-
-  void _handleNewEmergencyRequest(WebSocketMessage message) {
-    try {
-      debugPrint('🚨 Processing new emergency request');
-      debugPrint('📋 Message data: ${message.data}');
-
-      // Handle both direct emergency data and nested emergency data
-      Map<String, dynamic> emergencyData;
-      if (message.data.containsKey('emergency')) {
-        emergencyData = message.data['emergency'] as Map<String, dynamic>;
-      } else {
-        emergencyData = message.data;
-      }
-
-      final request = EmergencyRequest.fromJson(emergencyData);
-
-      // Check if we already have this emergency request
-      final existingIndex = _emergencyRequests.indexWhere(
-        (existing) => existing.emergencyId == request.emergencyId,
-      );
-
-      if (existingIndex != -1) {
-        // Update existing request
-        _emergencyRequests[existingIndex] = request;
-        debugPrint(
-          '✅ Updated existing emergency request: ${request.emergencyId}',
-        );
-      } else {
-        // Add new request
-        _emergencyRequests.add(request);
-        debugPrint('✅ Added new emergency request: ${request.emergencyId}');
-      }
-
-      notifyListeners();
-    } catch (e) {
-      debugPrint('❌ Error handling emergency request: $e');
-      debugPrint('❌ Message data: ${message.data}');
-      _setError('Failed to process emergency request: ${e.toString()}');
     }
   }
 
