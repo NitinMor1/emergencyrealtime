@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DICOM File Upload Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .upload-container {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .drag-text {
+            margin: 20px 0;
+            color: #555;
+        }
+        .file-info {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+            text-align: left;
+        }
+        progress {
+            width: 100%;
+            height: 20px;
+            margin: 10px 0;
+        }
+        .success-message {
+            color: green;
+            font-weight: bold;
+        }
+        .error-message {
+            color: red;
+            font-weight: bold;
+        }
+        .buttons {
+            margin: 15px 0;
+        }
+        button {
+            padding: 8px 15px;
+            margin: 0 5px;
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #3367d6;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .file-actions button {
+            padding: 5px 10px;
+            margin: 2px;
+        }
+    </style>
+</head>
+<body>
+    <h1>DICOM File Upload Example</h1>
+    <p>This example shows how to upload large DICOM files with chunking to improve reliability.</p>
+
+    <div class="upload-container">
+        <h2>Upload DICOM Files</h2>
+        <div class="drag-text">Drag and drop DICOM files here or click to select files</div>
+        <input type="file" id="fileInput" multiple accept=".dcm,application/dicom,application/octet-stream" hidden />
+        <button onclick="document.getElementById('fileInput').click()">Select Files</button>
+    </div>
+
+    <div id="fileInfoContainer"></div>
+    <div id="uploadProgress" style="display: none;">
+        <h3>Upload Progress</h3>
+        <div id="progressContainer"></div>
+    </div>
+
+    <div class="buttons">
+        <button id="uploadButton" disabled>Upload Selected Files</button>
+        <button id="cancelButton" disabled>Cancel Upload</button>
+    </div>
+
+    <div id="uploadResult"></div>
+
+    <h2>DICOM File List</h2>
+    <div>
+        <label for="hospitalId">Hospital ID:</label>
+        <input type="text" id="hospitalId" placeholder="Enter hospital ID" value="">
+        <label for="patientId">Patient ID (optional):</label>
+        <input type="text" id="patientId" placeholder="Enter patient ID" value="">
+        <button id="refreshList">Refresh List</button>
+    </div>
+    <table id="fileList">
+        <thead>
+            <tr>
+                <th>Filename</th>
+                <th>Upload Date</th>
+                <th>Size</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="fileListBody">
+            <tr>
+                <td colspan="4">No files found</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <script>
+        // Constants
+        const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+        const API_BASE_URL = '/api/radiology';
+
+        // DOM Elements
+        const fileInput = document.getElementById('fileInput');
+        const fileInfoContainer = document.getElementById('fileInfoContainer');
+        const uploadButton = document.getElementById('uploadButton');
+        const cancelButton = document.getElementById('cancelButton');
+        const uploadResult = document.getElementById('uploadResult');
+        const uploadProgress = document.getElementById('uploadProgress');
+        const progressContainer = document.getElementById('progressContainer');
+        const refreshListButton = document.getElementById('refreshList');
+        const fileListBody = document.getElementById('fileListBody');
+        const hospitalIdInput = document.getElementById('hospitalId');
+        const patientIdInput = document.getElementById('patientId');
+
+        // State
+        let selectedFiles = [];
+        let isUploading = false;
+        let shouldCancelUpload = false;
+
+        // Event Listeners
+        fileInput.addEventListener('change', handleFileSelection);
+        uploadButton.addEventListener('click', uploadFiles);
+        cancelButton.addEventListener('click', cancelUpload);
+        refreshListButton.addEventListener('click', refreshFileList);
+
+        // Set up drag and drop
+        const dropZone = document.querySelector('.upload-container');
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#4285f4';
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.borderColor = '#ccc';
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#ccc';
+            if (e.dataTransfer.files.length > 0) {
+                fileInput.files = e.dataTransfer.files;
+                handleFileSelection();
+            }
+        });
+
+        // Functions
+        function handleFileSelection() {
+            selectedFiles = Array.from(fileInput.files);
+            fileInfoContainer.innerHTML = '';
+            
+            if (selectedFiles.length > 0) {
+                selectedFiles.forEach((file, index) => {
+                    const fileInfo = document.createElement('div');
+                    fileInfo.className = 'file-info';
+                    fileInfo.innerHTML = `
+                        <strong>File ${index + 1}:</strong> ${file.name}<br>
+                        <strong>Size:</strong> ${formatFileSize(file.size)}<br>
+                        <strong>Type:</strong> ${file.type || 'application/dicom'}
+                    `;
+                    fileInfoContainer.appendChild(fileInfo);
+                });
+                
+                uploadButton.disabled = false;
+            } else {
+                uploadButton.disabled = true;
+            }
+            
+            cancelButton.disabled = true;
+        }
+
+        async function uploadFiles() {
+            if (selectedFiles.length === 0) return;
+            
+            const hospitalId = hospitalIdInput.value;
+            const patientId = patientIdInput.value;
+            
+            if (!hospitalId) {
+                alert('Please enter a Hospital ID');
+                return;
+            }
+            
+            isUploading = true;
+            shouldCancelUpload = false;
+            uploadButton.disabled = true;
+            cancelButton.disabled = false;
+            uploadResult.innerHTML = '';
+            uploadProgress.style.display = 'block';
+            progressContainer.innerHTML = '';
+            
+            try {
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    if (shouldCancelUpload) break;
+                    
+                    const file = selectedFiles[i];
+                    const progressDiv = createProgressElement(file.name, i);
+                    progressContainer.appendChild(progressDiv);
+                    
+                    try {
+                        const result = await uploadFileInChunks(file, hospitalId, patientId, (progress) => {
+                            updateProgressBar(i, progress);
+                        });
+                        
+                        updateUploadStatus(i, true, `File ${file.name} uploaded successfully`);
+                    } catch (error) {
+                        console.error(`Error uploading ${file.name}:`, error);
+                        updateUploadStatus(i, false, `Failed to upload ${file.name}: ${error.message}`);
+                    }
+                }
+                
+                await refreshFileList();
+            } catch (error) {
+                console.error('Error during upload:', error);
+                uploadResult.innerHTML = `<div class="error-message">Error during upload: ${error.message}</div>`;
+            } finally {
+                isUploading = false;
+                uploadButton.disabled = false;
+                cancelButton.disabled = true;
+            }
+        }
+
+        function cancelUpload() {
+            shouldCancelUpload = true;
+            cancelButton.disabled = true;
+            uploadResult.innerHTML = `<div class="error-message">Upload canceled</div>`;
+        }
+
+        function createProgressElement(fileName, index) {
+            const div = document.createElement('div');
+            div.className = 'file-upload-progress';
+            div.style.marginBottom = '15px';
+            div.innerHTML = `
+                <div>${fileName}</div>
+                <progress id="progress-${index}" value="0" max="100"></progress>
+                <div id="status-${index}">Preparing upload...</div>
+            `;
+            return div;
+        }
+
+        function updateProgressBar(index, progress) {
+            const progressBar = document.getElementById(`progress-${index}`);
+            if (progressBar) {
+                progressBar.value = progress;
+            }
+        }
+
+        function updateUploadStatus(index, success, message) {
+            const statusElement = document.getElementById(`status-${index}`);
+            if (statusElement) {
+                statusElement.className = success ? 'success-message' : 'error-message';
+                statusElement.textContent = message;
+            }
+        }
+
+        async function uploadFileInChunks(file, hospitalId, patientId, onProgress) {
+            const fileId = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+            
+            for (let chunkNumber = 0; chunkNumber < totalChunks; chunkNumber++) {
+                if (shouldCancelUpload) throw new Error('Upload canceled by user');
+                
+                const start = chunkNumber * CHUNK_SIZE;
+                const end = Math.min(start + CHUNK_SIZE, file.size);
+                const chunk = file.slice(start, end);
+                
+                // Build the URL with query parameters
+                const url = new URL(`${API_BASE_URL}/dicom/chunk-upload`, window.location.origin);
+                url.searchParams.append('hospitalId', hospitalId);
+                if (patientId) url.searchParams.append('patientId', patientId);
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-File-Identifier': fileId,
+                        'X-Chunk-Number': chunkNumber.toString(),
+                        'X-Total-Chunks': totalChunks.toString(),
+                        'Content-Type': 'application/octet-stream'
+                    },
+                    body: chunk
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Failed to upload chunk ${chunkNumber}: ${errorData.message}`);
+                }
+                
+                // Update progress
+                const progress = Math.round(((chunkNumber + 1) / totalChunks) * 100);
+                onProgress(progress);
+                
+                // If this was the last chunk, get the final result
+                if (chunkNumber === totalChunks - 1) {
+                    const finalResult = await response.json();
+                    return finalResult;
+                }
+            }
+        }
+
+        async function refreshFileList() {
+            const hospitalId = hospitalIdInput.value;
+            const patientId = patientIdInput.value;
+            
+            if (!hospitalId) {
+                alert('Please enter a Hospital ID to list files');
+                return;
+            }
+            
+            try {
+                // Build the URL with query parameters
+                const url = new URL(`${API_BASE_URL}/dicom/list`, window.location.origin);
+                url.searchParams.append('hospitalId', hospitalId);
+                if (patientId) url.searchParams.append('patientId', patientId);
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch file list');
+                }
+                
+                const data = await response.json();
+                
+                if (data.success && data.files && data.files.length > 0) {
+                    renderFileList(data.files);
+                } else {
+                    fileListBody.innerHTML = '<tr><td colspan="4">No files found</td></tr>';
+                }
+            } catch (error) {
+                console.error('Error fetching file list:', error);
+                fileListBody.innerHTML = `<tr><td colspan="4">Error: ${error.message}</td></tr>`;
+            }
+        }
+
+        function renderFileList(files) {
+            fileListBody.innerHTML = '';
+            
+            files.forEach(file => {
+                const row = document.createElement('tr');
+                
+                const nameCell = document.createElement('td');
+                nameCell.textContent = file.filename || 'Unknown';
+                
+                const dateCell = document.createElement('td');
+                dateCell.textContent = formatDate(file.uploadDate);
+                
+                const sizeCell = document.createElement('td');
+                sizeCell.textContent = formatFileSize(file.size);
+                
+                const actionsCell = document.createElement('td');
+                actionsCell.className = 'file-actions';
+                
+                const downloadButton = document.createElement('button');
+                downloadButton.textContent = 'Download';
+                downloadButton.onclick = () => downloadFile(file.public_id);
+                
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = 'Delete';
+                deleteButton.style.backgroundColor = '#d93025';
+                deleteButton.onclick = () => deleteFile(file.public_id);
+                
+                actionsCell.appendChild(downloadButton);
+                actionsCell.appendChild(deleteButton);
+                
+                row.appendChild(nameCell);
+                row.appendChild(dateCell);
+                row.appendChild(sizeCell);
+                row.appendChild(actionsCell);
+                
+                fileListBody.appendChild(row);
+            });
+        }
+
+        function downloadFile(publicId) {
+            window.open(`${API_BASE_URL}/dicom/${encodeURIComponent(publicId)}`, '_blank');
+        }
+
+        async function deleteFile(publicId) {
+            if (!confirm('Are you sure you want to delete this file?')) return;
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/dicom/${encodeURIComponent(publicId)}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    alert('File deleted successfully');
+                    refreshFileList();
+                } else {
+                    const errorData = await response.json();
+                    alert(`Error deleting file: ${errorData.message}`);
+                }
+            } catch (error) {
+                console.error('Error deleting file:', error);
+                alert(`Error deleting file: ${error.message}`);
+            }
+        }
+
+        // Helper functions
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return 'Unknown date';
+            
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleString();
+            } catch (e) {
+                return dateString;
+            }
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            if (hospitalIdInput.value) {
+                refreshFileList();
+            }
+        });
+    </script>
+</body>
+</html>
