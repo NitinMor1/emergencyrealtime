@@ -36,6 +36,7 @@ export function handleWebSocketConnection(ws: WebSocket, req: IncomingMessage) {
     }
 
     const validRoles: UserRole[] = ['hospital', 'paramedic', 'patient', 'doctor', 'nurse', 'admin', 'receptionist', 'technician', 'pharmacist'];
+    
     if (!role || !validRoles.includes(role as UserRole)) {
         console.error('WebSocket connection rejected: Invalid or missing role');
         ws.send(JSON.stringify({

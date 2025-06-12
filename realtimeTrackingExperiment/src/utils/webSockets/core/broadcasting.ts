@@ -1,7 +1,7 @@
 // Broadcasting utilities for role-based WebSocket communication
 import WebSocket from 'ws';
 import { ClientInfo, UserRole, WebSocketResponse } from '../types';
-import { 
+import {
     getClientsByRole,
     getClientsByHospital,
     getClientsByDepartment,
@@ -15,7 +15,7 @@ import {
  */
 export function sendToClients(clients: ClientInfo[], message: WebSocketResponse): void {
     const messageStr = JSON.stringify(message);
-    
+
     clients.forEach(client => {
         if (client.ws.readyState === WebSocket.OPEN) {
             try {
@@ -32,7 +32,7 @@ export function sendToClients(clients: ClientInfo[], message: WebSocketResponse)
  */
 export function sendToWebSockets(webSockets: WebSocket[], message: WebSocketResponse): void {
     const messageStr = JSON.stringify(message);
-    
+
     webSockets.forEach(ws => {
         if (ws.readyState === WebSocket.OPEN) {
             try {
@@ -50,10 +50,10 @@ export function sendToWebSockets(webSockets: WebSocket[], message: WebSocketResp
 export function broadcastToRoles(roles: UserRole[], message: WebSocketResponse, excludeUserId?: string): void {
     roles.forEach(role => {
         const clients = getClientsByRole(role);
-        const filteredClients = excludeUserId 
+        const filteredClients = excludeUserId
             ? clients.filter(client => client.userId !== excludeUserId)
             : clients;
-        
+
         sendToClients(filteredClients, message);
     });
 }
@@ -63,10 +63,10 @@ export function broadcastToRoles(roles: UserRole[], message: WebSocketResponse, 
  */
 export function broadcastToHospital(hospitalId: string, message: WebSocketResponse, excludeUserId?: string): void {
     const clients = getClientsByHospital(hospitalId);
-    const filteredClients = excludeUserId 
+    const filteredClients = excludeUserId
         ? clients.filter(client => client.userId !== excludeUserId)
         : clients;
-    
+
     sendToClients(filteredClients, message);
 }
 
@@ -74,16 +74,16 @@ export function broadcastToHospital(hospitalId: string, message: WebSocketRespon
  * Broadcast to all clients in a specific department
  */
 export function broadcastToDepartment(
-    hospitalId: string, 
-    department: string, 
-    message: WebSocketResponse, 
+    hospitalId: string,
+    department: string,
+    message: WebSocketResponse,
     excludeUserId?: string
 ): void {
     const clients = getClientsByDepartment(hospitalId, department);
-    const filteredClients = excludeUserId 
+    const filteredClients = excludeUserId
         ? clients.filter(client => client.userId !== excludeUserId)
         : clients;
-    
+
     sendToClients(filteredClients, message);
 }
 
@@ -109,10 +109,17 @@ export function broadcastToUsers(userIds: string[], message: WebSocketResponse):
  */
 export function broadcastToParamedics(hospitalId: string, message: WebSocketResponse, excludeUserId?: string): void {
     const clients = paramedicsClients.get(hospitalId) || [];
-    const filteredClients = excludeUserId 
+    const filteredClients = excludeUserId
         ? clients.filter(client => client.userId !== excludeUserId)
         : clients;
-    
+
+    sendToClients(filteredClients, message);
+}
+
+export function broadcastToParamedic(hospitalId: string, message: WebSocketResponse, id: string): void {
+    const clients = paramedicsClients.get(hospitalId) || [];
+    const filteredClients = clients.filter(client => client.userId == id);
+
     sendToClients(filteredClients, message);
 }
 
@@ -121,10 +128,10 @@ export function broadcastToParamedics(hospitalId: string, message: WebSocketResp
  */
 export function broadcastToPatients(message: WebSocketResponse, excludeUserId?: string): void {
     const clients = Array.from(patientClients.values());
-    const filteredClients = excludeUserId 
+    const filteredClients = excludeUserId
         ? clients.filter(client => client.userId !== excludeUserId)
         : clients;
-    
+
     sendToClients(filteredClients, message);
 }
 
@@ -150,16 +157,20 @@ export function sendTargetedNotification(
     if (department && hospitalId) {
         // Broadcast to specific department
         broadcastToDepartment(hospitalId, department, message, excludeUserId);
-    } else if (hospitalId) {
+    }
+
+    else if (hospitalId) {
         // Broadcast to specific hospital
         const hospitalClients = getClientsByHospital(hospitalId);
         const targetClients = hospitalClients.filter(client => targetRoles.includes(client.role));
-        const filteredClients = excludeUserId 
+        const filteredClients = excludeUserId
             ? targetClients.filter(client => client.userId !== excludeUserId)
             : targetClients;
-        
+
         sendToClients(filteredClients, message);
-    } else {
+    }
+
+    else {
         // Broadcast to roles globally
         broadcastToRoles(targetRoles, message, excludeUserId);
     }
@@ -174,20 +185,25 @@ export function sendEmergencyAlert(
     message: WebSocketResponse,
     includeDepartments?: string[]
 ): void {
-    // Emergency-capable roles
+    // // Emergency-capable roles
     const emergencyRoles: UserRole[] = ['doctor', 'nurse', 'admin', 'hospital'];
-    
-    if (includeDepartments && includeDepartments.length > 0) {        // Send to specific departments
-        includeDepartments.forEach(dept => {
-            sendTargetedNotification(emergencyRoles, message, hospitalId, dept);
-        });
-    } else {
-        // Send to all emergency-capable roles in the hospital
-        sendTargetedNotification(emergencyRoles, message, hospitalId);
-    }
-    
+
+    // if (includeDepartments && includeDepartments.length > 0) {        // Send to specific departments
+    //     includeDepartments.forEach(dept => {
+    //         sendTargetedNotification(emergencyRoles, message, hospitalId, dept);
+    //     });
+    // } else {
+    //     // Send to all emergency-capable roles in the hospital
+    //     sendTargetedNotification(emergencyRoles, message, hospitalId);
+    // }
+
     // Also notify paramedics assigned to this hospital
-    broadcastToParamedics(hospitalId, message);
+    // broadcastToParamedics(hospitalId, message);
+
+    console.log("hospitalId: ", hospitalId);
+    console.log("message: ", message)
+    sendTargetedNotification([emergencyRoles[3]], message, hospitalId);
+
 }
 
 /**
@@ -198,9 +214,9 @@ export function sendChatRoomNotification(
     message: WebSocketResponse,
     excludeUserId?: string
 ): void {
-    const targetUsers = excludeUserId 
+    const targetUsers = excludeUserId
         ? participantIds.filter(id => id !== excludeUserId)
         : participantIds;
-    
+
     broadcastToUsers(targetUsers, message);
 }

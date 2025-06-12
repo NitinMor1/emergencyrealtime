@@ -29,17 +29,10 @@ class EmergencyTrackingApp extends StatelessWidget {
               final isAuthenticated = authProvider.isAuthenticated;
               final isLoginRoute = state.matchedLocation == '/login';
 
-              // If not authenticated and not on login page, redirect to login
-              if (!isAuthenticated && !isLoginRoute) {
-                return '/login';
-              }
+              if (!isAuthenticated && !isLoginRoute) return '/login';
+              if (isAuthenticated && isLoginRoute) return '/dashboard';
 
-              // If authenticated and on login page, redirect to dashboard
-              if (isAuthenticated && isLoginRoute) {
-                return '/dashboard';
-              }
-
-              return null; // No redirect needed
+              return null;
             },
             routes: [
               GoRoute(
@@ -63,10 +56,10 @@ class EmergencyTrackingApp extends StatelessWidget {
               ),
               useMaterial3: true,
               appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
-              cardTheme: CardTheme(
+              cardTheme: const CardThemeData(
                 elevation: 2,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
               ),
               elevatedButtonTheme: ElevatedButtonThemeData(
@@ -88,10 +81,10 @@ class EmergencyTrackingApp extends StatelessWidget {
               ),
               useMaterial3: true,
               appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
-              cardTheme: CardTheme(
+              cardTheme: const CardThemeData(
                 elevation: 2,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
               ),
               elevatedButtonTheme: ElevatedButtonThemeData(

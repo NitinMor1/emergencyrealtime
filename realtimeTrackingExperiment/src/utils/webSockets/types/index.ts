@@ -9,16 +9,16 @@ export type UserStatus = 'active' | 'idle' | 'busy' | 'emergency';
 export type NotificationType = 'emergency' | 'chat' | 'dispatch' | 'consultation' | 'admin';
 
 // WebSocket message types for the message handler
-export type WebSocketMessageType = 
+export type WebSocketMessageType =
     | 'login' | 'logout'
     | 'joinHospital' | 'locationUpdate' | 'locationRequest'
     | 'sendMessage' | 'joinChatRoom' | 'markAsRead' | 'deleteMessage' | 'typing'
     | 'userOnline' | 'userOffline'
-    | 'emergency_request' | 'emergencyResponse' | 'emergencyStatusUpdate'
+    | 'emergency_request' | 'emergencyAcceptance' | 'emergencyStatusUpdate'
     | 'callInitiate' | 'callAccept' | 'callReject' | 'callEnd' | 'callAddParticipant'
     | 'notification' | 'heartbeat'
     | 'getHospitalFleet' | 'getHospitalFleetStatus' | 'getHospitalActiveAmbulances'
-    | 'joinTrackingRoom' | 'connect';
+    | 'joinTrackingRoom' | 'connect' | 'shareLocation';
 
 export interface ClientInfo {
     ws: WebSocket;
@@ -49,8 +49,9 @@ export interface EmergencyData {
     timestamp: string;
     requestedBy: string;
     requestedByRole: UserRole;
-    assignedTo?: string;
-    assignedRole?: UserRole;
+    responderId?: string;
+    driverId?: string;
+    paramedicId?: string;
     assignedDepartment?: string;
     estimatedArrival?: string;
     acceptedAt?: string;
@@ -80,6 +81,22 @@ export interface EmergencyData {
         glucoseLevel?: number;
         consciousness?: string;
     };
+}
+
+export interface EmergencyRoomInfo {
+    paramedic: WebSocket;
+    patient: WebSocket;
+    hospitalResponder: WebSocket;
+    patientLocation?: {
+        timestamp: string;
+        lat: string;
+        lng: string;
+    },
+    paramedicLocation?: {
+        timestamp: string;
+        lat: string;
+        lng: string;
+    }
 }
 
 export interface ChatMessage {

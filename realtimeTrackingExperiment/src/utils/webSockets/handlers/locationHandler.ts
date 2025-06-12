@@ -1,13 +1,15 @@
 // Location tracking system with role-based access control
 import WebSocket from 'ws';
 import { LocationUpdate, UserRole, WebSocketResponse } from '../types';
-import { 
+import {
     sendTargetedNotification,
-    broadcastToParamedics
+    broadcastToParamedics,
+    sendToWebSockets
 } from '../core/broadcasting';
-import { 
+import {
     userLocations,
-    getClientsByRole
+    getClientsByRole,
+    emergencyRooms
 } from '../core/clientManager';
 
 /**
@@ -20,51 +22,51 @@ export async function handleLocationUpdate(
         userRole: UserRole;
         hospitalId?: string;
         location: {
-            lat: number;
-            lng: number;
-            accuracy?: number;
-            speed?: number;
-            heading?: number;
+            lat: string;
+            lng: string;
         };
-        isEmergency?: boolean;
-        emergencyId?: string;
+        emergencyRoomId?: string;
     }
 ): Promise<void> {
     try {
+        console.log(data)
+        if (!data.emergencyRoomId || !data.userRole) {
+            return;
+        }
         const timestamp = new Date().toISOString();
-        
+
         // Update location in cache
         const locationData = {
             ...data.location,
             timestamp
         };
-        userLocations.set(data.userId, locationData);
 
-        // Create location update message
-        const locationUpdate: LocationUpdate = {
-            userId: data.userId,
-            userRole: data.userRole,
-            location: locationData,
-            isEmergency: data.isEmergency || false,
-            emergencyId: data.emergencyId,
-            timestamp
-        };
 
-        // Confirm to sender
-        ws.send(JSON.stringify({
-            type: 'location_update_confirmed',
-            success: true,
-            data: {
-                userId: data.userId,
-                timestamp
-            },
-            timestamp
-        }));
+        const emergencyRoom = emergencyRooms.get(data.emergencyRoomId);
 
-        // Broadcast based on role and context
-        await broadcastLocationUpdate(locationUpdate, data.hospitalId);
+        if (emergencyRoom) {
+            if (data.userRole == "paramedic") {
+                emergencyRoom.paramedicLocation = locationData;
+            }
+            else if (data.userRole == "patient") {
+                emergencyRoom.patientLocation = locationData;
+            }
 
-        console.log(`Location updated for ${data.userRole} ${data.userId}${data.isEmergency ? ' (EMERGENCY)' : ''}`);
+            const participants: WebSocket[] = [emergencyRoom.hospitalResponder, emergencyRoom.paramedic, emergencyRoom.patient]
+
+            const message: WebSocketResponse = {
+                type: 'locationUpdates',
+                timestamp: timestamp,
+                data: {
+                    paramedicLocation: emergencyRoom.paramedicLocation,
+                    patientLocation: emergencyRoom.patientLocation
+                }
+            }
+
+            sendToWebSockets(participants, message);
+            console.log(`Location updated for ${data.userRole} ${data.userId}' (EMERGENCY)' `);
+        }
+
 
     } catch (error) {
         console.error('Error handling location update:', error);
@@ -92,7 +94,7 @@ export async function handleLocationRequest(
 ): Promise<void> {
     try {
         const timestamp = new Date().toISOString();
-        
+
         // Check authorization
         const isAuthorized = await checkLocationAccessAuthorization(
             data.requesterId,
@@ -113,7 +115,7 @@ export async function handleLocationRequest(
 
         // Get location data
         const locationData = userLocations.get(data.targetUserId);
-        
+
         if (!locationData) {
             ws.send(JSON.stringify({
                 type: 'location_not_found',
@@ -178,7 +180,7 @@ async function broadcastLocationUpdate(locationUpdate: LocationUpdate, hospitalI
                     );
                 }
             }
-            break;        case 'patient':
+            break; case 'patient':
             // Patient locations only visible during emergencies or to assigned care team
             if (locationUpdate.isEmergency && hospitalId) {
                 sendTargetedNotification(
@@ -189,7 +191,7 @@ async function broadcastLocationUpdate(locationUpdate: LocationUpdate, hospitalI
                     },
                     hospitalId
                 );
-                
+
                 // Also notify paramedics
                 broadcastToParamedics(hospitalId, {
                     ...broadcastMessage,
@@ -304,7 +306,7 @@ export function getParamedicLocations(hospitalId: string, requesterId: string, r
 
     const locations: Array<{ userId: string; location: any }> = [];
     const paramedics = getClientsByRole('paramedic');
-    
+
     paramedics.forEach(paramedic => {
         if (paramedic.hospitalId === hospitalId) {
             const location = userLocations.get(paramedic.userId);
@@ -325,7 +327,7 @@ export function getParamedicLocations(hospitalId: string, requesterId: string, r
  */
 export function cleanupOldLocations(): void {
     const cutoffTime = Date.now() - (24 * 60 * 60 * 1000); // 24 hours ago
-    
+
     for (const [userId, locationData] of userLocations.entries()) {
         const locationTime = new Date(locationData.timestamp).getTime();
         if (locationTime < cutoffTime) {

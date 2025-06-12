@@ -1,17 +1,17 @@
 import WebSocket from 'ws';
 import { WebSocketMessageType } from '../types';
-import { 
-    handleSendMessage, 
-    handleMarkAsRead, 
-    handleDeleteMessage, 
+import {
+    handleSendMessage,
+    handleMarkAsRead,
+    handleDeleteMessage,
     handleTypingStatus
 } from './chatHandler';
-import { 
+import {
     handleEmergencyRequest,
     handleEmergencyResponse,
-    handleEmergencyStatusUpdate
+    handleEmergencyStatusUpdate,
 } from './emergencyHandler';
-import { 
+import {
     handleLocationUpdate,
     handleLocationRequest
 } from './locationHandler';
@@ -36,8 +36,8 @@ export interface MessageData {
 }
 
 export async function handleWebSocketMessage(
-    ws: WebSocket, 
-    data: MessageData, 
+    ws: WebSocket,
+    data: MessageData,
     userId: string | null
 ): Promise<void> {
     console.log('Received WebSocket message:', { type: data.type, userId });
@@ -94,18 +94,14 @@ export async function handleWebSocketMessage(
                 break;
 
             case 'emergency_request':
-             sendEmergencyAlert(data.hospitalId, {
-                 data: {
-                     ...data
-                 },
-                 type: 'emergency_alert',
-                 timestamp: new Date().toISOString()
-             });
-        break;
-           
-            case 'emergencyResponse':
+                await handleEmergencyRequestMessage(ws, data, userId!)
+                break;
+
+            case 'emergencyAcceptance':
                 await handleEmergencyResponseMessage(ws, data, userId!);
-                break;            case 'emergencyStatusUpdate':
+                break;
+
+            case 'emergencyStatusUpdate':
                 await handleEmergencyStatusUpdateMessage(ws, data, userId!);
                 break;
 
@@ -127,7 +123,7 @@ export async function handleWebSocketMessage(
 
             case 'callAddParticipant':
                 await handleCallAddParticipantRequest(ws, data, userId!);
-                break;            
+                break;
             case 'heartbeat':
                 ws.send(JSON.stringify({
                     type: 'heartbeat_ack',
@@ -177,8 +173,7 @@ async function handleLocationUpdateMessage(ws: WebSocket, data: MessageData, use
             userRole: data.userRole,
             hospitalId: data.hospitalId,
             location: data.location,
-            isEmergency: data.isEmergency,
-            emergencyId: data.emergencyId
+            emergencyRoomId: data.emergencyRoomId
         });
     }
 }
@@ -199,10 +194,10 @@ async function handleLocationRequestMessage(ws: WebSocket, data: MessageData, us
 async function handleSendMessageRequest(ws: WebSocket, data: MessageData, userId: string): Promise<void> {
     if (data.receiverId && data.message && data.hospitalId) {
         await handleSendMessage(
-            userId, 
-            data.receiverId, 
-            data.message, 
-            data.hospitalId, 
+            userId,
+            data.receiverId,
+            data.message,
+            data.hospitalId,
             ws,
             data.messageType ?? 'text',
             data.replyTo
@@ -229,9 +224,9 @@ async function handleMarkAsReadRequest(ws: WebSocket, data: MessageData, userId:
 async function handleDeleteMessageRequest(ws: WebSocket, data: MessageData, userId: string): Promise<void> {
     if (data.messageId && data.hospitalId && data.chatRoomId) {
         await handleDeleteMessage(
-            data.messageId, 
-            userId, 
-            data.hospitalId, 
+            data.messageId,
+            userId,
+            data.hospitalId,
             data.deleteForAll ?? false,
             data.chatRoomId,
             ws
@@ -265,13 +260,14 @@ async function handleEmergencyResponseMessage(ws: WebSocket, data: MessageData, 
     if (data.emergencyId && data.action) {
         await handleEmergencyResponse(ws, {
             emergencyId: data.emergencyId,
-            responderId: userId,
+            driverId: data.driverId,
+            paramedicId: data.paramedicId,
             responderRole: data.responderRole ?? 'doctor',
             action: data.action,
             estimatedArrival: data.estimatedArrival,
             assignedDepartment: data.assignedDepartment,
             notes: data.notes
-        });
+        }, userId);
     }
 }
 
@@ -309,7 +305,7 @@ async function handleJoinChatRoom(ws: WebSocket, data: {
     hospitalId: string;
 }): Promise<void> {
     const chatRoomId = generateChatRoomId(data.senderId, data.receiverId, data.hospitalId);
-    
+
     // Add user to chat room (this would typically involve adding to a chat room map)
     ws.send(JSON.stringify({
         type: 'chat_room_joined',
@@ -325,7 +321,7 @@ async function handleJoinChatRoom(ws: WebSocket, data: {
 
 async function handleUserOnline(userId: string, hospitalId: string, ws: WebSocket): Promise<void> {
     const timestamp = new Date().toISOString();
-    
+
     // For now, just send confirmation back to the user
     ws.send(JSON.stringify({
         type: 'status_updated',
@@ -340,7 +336,7 @@ async function handleUserOnline(userId: string, hospitalId: string, ws: WebSocke
 
 async function handleUserOffline(userId: string, hospitalId: string, ws: WebSocket): Promise<void> {
     const timestamp = new Date().toISOString();
-    
+
     // For now, just send confirmation back to the user  
     ws.send(JSON.stringify({
         type: 'status_updated',
@@ -437,7 +433,7 @@ async function handleCallAddParticipantRequest(ws: WebSocket, data: MessageData,
         ws.send(JSON.stringify({
             type: 'participantAddResult',
             success,
-            data: { 
+            data: {
                 callRoomId: data.callRoomId,
                 participantId: data.participantId
             },
@@ -456,7 +452,7 @@ async function handleCallAddParticipantRequest(ws: WebSocket, data: MessageData,
 async function handleGetHospitalFleetRequest(ws: WebSocket, data: MessageData, userId: string): Promise<void> {
     if (data.hospitalId) {
         const fleetStatus = getHospitalFleetStatus(data.hospitalId);
-        
+
         if (fleetStatus) {
             ws.send(JSON.stringify({
                 type: 'hospitalFleetStatus',
@@ -465,7 +461,7 @@ async function handleGetHospitalFleetRequest(ws: WebSocket, data: MessageData, u
                     hospitalId: fleetStatus.hospitalId,
                     totalAmbulances: fleetStatus.totalAmbulances,
                     activeAmbulances: fleetStatus.activeAmbulances,
-                    availableAmbulances: fleetStatus.availableAmbulances,                    ambulances: Array.from(fleetStatus.ambulances.values()).map((ambulance: IAmbulanceTracking) => ({
+                    availableAmbulances: fleetStatus.availableAmbulances, ambulances: Array.from(fleetStatus.ambulances.values()).map((ambulance: IAmbulanceTracking) => ({
                         emergencyId: ambulance.emergencyId,
                         vehicleNumber: ambulance.vehicleNumber,
                         status: ambulance.lastKnownLocation?.status ?? 'idle',
@@ -500,7 +496,7 @@ async function handleGetHospitalFleetRequest(ws: WebSocket, data: MessageData, u
 async function handleGetHospitalActiveAmbulancesRequest(ws: WebSocket, data: MessageData, userId: string): Promise<void> {
     if (data.hospitalId) {
         const activeAmbulances = getHospitalActiveAmbulances(data.hospitalId);
-        
+
         ws.send(JSON.stringify({
             type: 'hospitalActiveAmbulances',
             hospitalId: data.hospitalId,
