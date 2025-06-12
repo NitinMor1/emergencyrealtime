@@ -1,15 +1,21 @@
 // Emergency booking and dispatch system with role-based isolation
 import WebSocket from 'ws';
-import { EmergencyData, UserRole, Priority, WebSocketResponse } from '../types';
-import { 
+import { EmergencyData, UserRole, Priority, WebSocketResponse, EmergencyRoomInfo } from '../types';
+import {
     sendEmergencyAlert,
     broadcastToHospital,
     broadcastToParamedics,
-    broadcastToUser
+    broadcastToUser,
+    broadcastToParamedic
 } from '../core/broadcasting';
-import { 
-    generateEmergencyId
+import {
+    emergencyRooms,
+    generateEmergencyId,
+    paramedicsClients,
+    patientClients
 } from '../core/clientManager';
+import { clients } from '../utils/utils';
+import { generateChatRoomId, generateEmergencyRoomId } from '../core/clientManager.old';
 
 // Emergency state management
 const activeEmergencies = new Map<string, EmergencyData>();
@@ -36,7 +42,7 @@ export async function handleEmergencyRequest(
     try {
         const emergencyId = generateEmergencyId();
         const timestamp = new Date().toISOString();
-        
+
         const emergencyData: EmergencyData = {
             emergencyId,
             patientId: data.patientId,
@@ -54,7 +60,7 @@ export async function handleEmergencyRequest(
 
         // Store emergency
         activeEmergencies.set(emergencyId, emergencyData);
-        
+
         // Add to hospital queue
         if (!emergencyQueue.has(data.hospitalId)) {
             emergencyQueue.set(data.hospitalId, []);
@@ -95,11 +101,11 @@ export async function handleEmergencyRequest(
         sendEmergencyAlert(data.hospitalId, alertMessage, emergencyDepartments);
 
         // Notify paramedics
-        broadcastToParamedics(data.hospitalId, {
-            type: 'emergency_available',
-            data: emergencyData,
-            timestamp
-        });
+        // broadcastToParamedics(data.hospitalId, {
+        //     type: 'emergency_available',
+        //     data: emergencyData,
+        //     timestamp
+        // });
 
         console.log(`Emergency ${emergencyId} created for hospital ${data.hospitalId} with priority ${data.priority}`);
 
@@ -113,6 +119,16 @@ export async function handleEmergencyRequest(
     }
 }
 
+export async function handleLocationSharing(
+    location: {
+        lat: string;
+        lng: string;
+    },
+
+) {
+
+}
+
 /**
  * Handle emergency response (accept/reject) from hospital staff
  */
@@ -120,13 +136,15 @@ export async function handleEmergencyResponse(
     ws: WebSocket,
     data: {
         emergencyId: string;
-        responderId: string;
+        paramedicId: string;
         responderRole: UserRole;
         action: 'accept' | 'reject';
         estimatedArrival?: string;
         assignedDepartment?: string;
+        driverId?: string;
         notes?: string;
-    }
+    },
+    userId: string
 ): Promise<void> {
     try {
         const emergency = activeEmergencies.get(data.emergencyId);
@@ -144,12 +162,18 @@ export async function handleEmergencyResponse(
         if (data.action === 'accept') {
             // Update emergency status
             emergency.status = 'accepted';
-            emergency.assignedTo = data.responderId;
-            emergency.assignedRole = data.responderRole;
+            emergency.responderId = userId;
+            emergency.paramedicId = data.paramedicId;
+            (data.driverId && (emergency.driverId = data.driverId));
             emergency.estimatedArrival = data.estimatedArrival;
             emergency.assignedDepartment = data.assignedDepartment;
             emergency.responseNotes = data.notes;
             emergency.acceptedAt = timestamp;
+
+
+            const emergencyRoomId = await handleEmergencyJoinRoom(emergency.hospitalId, ws, emergency.requestedBy, emergency.paramedicId);
+
+            console.log(emergencyRoomId)
 
             // Remove from queue
             const queue = emergencyQueue.get(emergency.hospitalId);
@@ -160,13 +184,17 @@ export async function handleEmergencyResponse(
                 }
             }
 
+
             // Notify patient
-            broadcastToUser(emergency.patientId, {
+            broadcastToUser(emergency.requestedBy, {
                 type: 'emergency_accepted',
                 data: {
                     emergencyId: data.emergencyId,
-                    assignedTo: data.responderId,
+                    emergencyRoomId: emergencyRoomId,
                     assignedRole: data.responderRole,
+                    responderId: userId,
+                    driverId: data.driverId,
+                    paramedicId: data.paramedicId,
                     estimatedArrival: data.estimatedArrival,
                     hospitalId: emergency.hospitalId,
                     assignedDepartment: data.assignedDepartment,
@@ -180,24 +208,41 @@ export async function handleEmergencyResponse(
                 type: 'emergency_status_update',
                 data: {
                     emergencyId: data.emergencyId,
+                    emergencyRoomId: emergencyRoomId,
                     status: 'accepted',
-                    assignedTo: data.responderId,
-                    assignedRole: data.responderRole
+                    responderId: userId,
+                    responderRole: data.responderRole
                 },
                 timestamp
-            }, data.responderId);
+            }, userId);
 
-            console.log(`Emergency ${data.emergencyId} accepted by ${data.responderRole} ${data.responderId}`);        } else if (data.action === 'reject') {
+            broadcastToParamedic(emergency.hospitalId, {
+                type: 'emergency_assigned',
+                data: {
+                    emergencyId: data.emergencyId,
+                    emergencyRoomId: emergencyRoomId,
+                    status: 'accepted',
+                    responderId: userId,
+                    responderRole: data.responderRole
+                },
+                timestamp
+            }, data.paramedicId)
+
+
+            console.log(`Emergency ${data.emergencyId} accepted by ${data.responderRole} ${userId}`);
+        }
+
+        else if (data.action === 'reject') {
             // Keep in queue but log the rejection
             emergency.rejections ??= [];
             emergency.rejections.push({
-                rejectedBy: data.responderId,
+                rejectedBy: userId,
                 rejectedByRole: data.responderRole,
                 reason: data.notes,
                 timestamp
             });
 
-            console.log(`Emergency ${data.emergencyId} rejected by ${data.responderRole} ${data.responderId}`);
+            console.log(`Emergency ${data.emergencyId} rejected by ${data.responderRole} ${userId}`);
         }
 
         // Confirm to responder
@@ -211,6 +256,7 @@ export async function handleEmergencyResponse(
             timestamp
         }));
 
+
     } catch (error) {
         console.error('Error handling emergency response:', error);
         ws.send(JSON.stringify({
@@ -218,6 +264,50 @@ export async function handleEmergencyResponse(
             message: 'Failed to process emergency response',
             timestamp: new Date().toISOString()
         }));
+    }
+}
+
+export async function handleEmergencyJoinRoom(
+    hospitalId: string,
+    responder: WebSocket,
+    patientId: string,
+    paramedicId: string,
+) {
+    console.log(`[handleEmergencyJoinRoom] Called with:`);
+    console.log(`  hospitalId: ${hospitalId}`);
+    console.log(`  patientId: ${patientId}`);
+    console.log(`  paramedicId: ${paramedicId}`);
+
+    const paraClient = paramedicsClients.get(hospitalId);
+
+    const paramedicClientInfo = paraClient?.find(client => client.userId == paramedicId);
+
+    const paramedic = paramedicClientInfo?.ws;
+    const patient = patientClients.get(patientId)?.ws;
+
+
+    if (responder && patient && paramedic) {
+        console.log("[handleEmergencyJoinRoom] All participants found, creating emergency room");
+
+        const emergencyRoomId = generateEmergencyRoomId(patientId, hospitalId, paramedicId, "");
+        console.log(`[handleEmergencyJoinRoom] Generated emergencyRoomId: ${emergencyRoomId}`);
+
+        const participants: EmergencyRoomInfo = {
+            paramedic,
+            patient,
+            hospitalResponder: responder,
+        };
+
+        emergencyRooms.set(emergencyRoomId, participants);
+        console.log(`[handleEmergencyJoinRoom] emergencyRooms updated. Current rooms:`, Array.from(emergencyRooms.keys()));
+
+        return emergencyRoomId;
+    } else {
+        console.warn("[handleEmergencyJoinRoom] Missing participant(s):", {
+            responder: !!responder,
+            patient: !!patient,
+            paramedic: !!paramedic
+        });
     }
 }
 
@@ -252,7 +342,7 @@ export async function handleEmergencyStatusUpdate(
         emergency.status = data.status;
         emergency.lastUpdated = timestamp;
         emergency.lastUpdatedBy = data.updatedBy;
-          if (data.notes) {
+        if (data.notes) {
             emergency.progressNotes ??= [];
             emergency.progressNotes.push({
                 note: data.notes,
@@ -291,10 +381,10 @@ export async function handleEmergencyStatusUpdate(
         // Notify hospital staff
         broadcastToHospital(emergency.hospitalId, updateMessage);
 
-        // Notify paramedics if relevant
-        if (emergency.assignedRole === 'paramedic' || data.status === 'completed') {
-            broadcastToParamedics(emergency.hospitalId, updateMessage);
-        }
+        // // Notify paramedics if relevant
+        // if (emergency.assignedRole === 'paramedic' || data.status === 'completed') {
+        //     broadcastToParamedics(emergency.hospitalId, updateMessage);
+        // }
 
         // Confirm to updater
         ws.send(JSON.stringify({

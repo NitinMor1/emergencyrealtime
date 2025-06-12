@@ -190,16 +190,16 @@ export function getConnectionStats(): ConnectionStats {
     clients.forEach((clientList) => {
         clientList.forEach((clientInfo) => {
             stats.totalConnections++;
-            
+
             // Count by role
             const roleKey = `${clientInfo.role}s` as keyof ConnectionStats;
             if (typeof stats[roleKey] === 'number') {
                 (stats[roleKey] as number)++;
             }
-            
+
             // Count by hospital
             if (clientInfo.hospitalId) {
-                stats.hospitalBreakdown[clientInfo.hospitalId] = 
+                stats.hospitalBreakdown[clientInfo.hospitalId] =
                     (stats.hospitalBreakdown[clientInfo.hospitalId] || 0) + 1;
             }
 
@@ -208,13 +208,13 @@ export function getConnectionStats(): ConnectionStats {
                 if (!stats.departmentBreakdown[clientInfo.hospitalId]) {
                     stats.departmentBreakdown[clientInfo.hospitalId] = {};
                 }
-                stats.departmentBreakdown[clientInfo.hospitalId][clientInfo.department] = 
+                stats.departmentBreakdown[clientInfo.hospitalId][clientInfo.department] =
                     (stats.departmentBreakdown[clientInfo.hospitalId][clientInfo.department] || 0) + 1;
             }
 
             // Count by specialization
             if (clientInfo.specialization) {
-                stats.specializationBreakdown[clientInfo.specialization] = 
+                stats.specializationBreakdown[clientInfo.specialization] =
                     (stats.specializationBreakdown[clientInfo.specialization] || 0) + 1;
             }
         });
@@ -241,7 +241,7 @@ export function logClientConnections() {
     console.log(`Receptionists: ${stats.receptionists}`);
     console.log(`Technicians: ${stats.technicians}`);
     console.log(`Pharmacists: ${stats.pharmacists}`);
-    
+
     if (Object.keys(stats.hospitalBreakdown).length > 0) {
         console.log('Hospital Breakdown:');
         Object.entries(stats.hospitalBreakdown).forEach(([hospitalId, count]) => {
@@ -308,6 +308,11 @@ export function generateChatRoomId(senderId: string, receiverId: string, hospita
     const participants = [senderId, receiverId].sort((a, b) => a.localeCompare(b)).join('_');
     return `chat_${hospitalId}_${participants}`;
 }
+// Generate unique IDs for chat rooms and emergencies
+export function generateEmergencyRoomId(patientId: string, hospitalId: string, paramedicId: string, driverId: string): string {
+    const participants = [patientId, hospitalId, paramedicId, driverId].sort((a, b) => a.localeCompare(b)).join('_');
+    return `emergency_${participants}`;
+}
 
 export function generateEmergencyId(): string {
     return `emergency_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -350,7 +355,7 @@ export function getUserWebSockets(userId: string): WebSocket[] {
  */
 export function initializeClientManager(): void {
     console.log('Initializing WebSocket client manager...');
-    
+
     // Clear any existing data
     clients.clear();
     hospitalClients.clear();
@@ -359,7 +364,7 @@ export function initializeClientManager(): void {
     patientClients.clear();
     activeChats.clear();
     userLocations.clear();
-    
+
     // Reset stats
     connectionStats = {
         totalConnections: 0,
@@ -367,7 +372,7 @@ export function initializeClientManager(): void {
         paramedics: 0,
         patients: 0,
         doctors: 0,
-        nurses: 0,        admins: 0,
+        nurses: 0, admins: 0,
         receptionists: 0,
         technicians: 0,
         pharmacists: 0,
@@ -375,7 +380,7 @@ export function initializeClientManager(): void {
         departmentBreakdown: {},
         specializationBreakdown: {}
     };
-    
+
     console.log('WebSocket client manager initialized successfully');
 }
 
