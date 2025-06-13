@@ -13,9 +13,7 @@ import {
     paramedicsClients,
     patientClients
 } from '../core/clientManager';
-import { clients } from '../utils/utils';
-import { generateChatRoomId, generateEmergencyRoomId } from '../core/clientManager.old';
-import { EEmergencyType, ILocation } from '../../../features/emergency/emergencyModel';
+import { EEmergencyType, EStatus, ILocation } from '../../../features/emergency/emergencyModel';
 import { IUser } from 'features/account/users/UserModel';
 
 // Emergency state management
@@ -49,6 +47,7 @@ export async function handleEmergencyRequest(
 
         const emergencyData: EmergencyData = {
             emergencyId,
+            status: EStatus.REQUESTED,
             patientId: data.patientId,
             patientName: data.name,
             patientPhone: data.phoneNumber,
@@ -122,30 +121,31 @@ export async function handleEmergencyResponse(
     ws: WebSocket,
     data: {
         emergencyId: string,
-        emergencyRoomId: string,
-        driver: {
+        emergencyRoomId?: string,
+        driver?: {
             username: string;
             name: string;
             employeeId: string;
         },
-        paramedic: {
+        paramedic?: {
             username: string;
             name: string;
             employeeId: string;
         },
-        ambulance: string,
+        ambulance?: string,
         responderRole: IUser,
         action: 'accept' | 'reject',
         rejectionReason?: string,
-        notes: string,
+        notes?: string,
     },
     userId: string
 ): Promise<void> {
     const emergency: EmergencyData | undefined = activeEmergencies.get(data.emergencyId);
-    if (!emergency) {
+    console.log("emergency: " + emergency)
+    if (!emergency || emergency.status != EStatus.REQUESTED) {
         ws.send(JSON.stringify({
             type: 'error',
-            message: 'Emergency not found',
+            message: 'Emergency not found or already responded',
             timestamp: new Date().toISOString()
         }));
         return;
@@ -156,12 +156,22 @@ export async function handleEmergencyResponse(
 
         if (data.action === 'accept') {
 
+            if (!data.paramedic?.username || !data.driver?.username || !data.ambulance || !data.emergencyRoomId) {
+                ws.send(JSON.stringify({
+                    type: 'error',
+                    message: 'Paramedic, driver, and ambulance information are required to accept the emergency.',
+                    timestamp: new Date().toISOString()
+                }));
+                return;
+            }
+
             // Update emergency status
             emergency.responderId = userId;
             emergency.paramedic = data.paramedic;
             emergency.driver = data.driver;
             emergency.responseNotes = data.notes;
             emergency.acceptedAt = timestamp;
+            emergency.status = EStatus.CREATED
 
 
             await createAndJoinEmergencyJoinRoom(
@@ -226,6 +236,8 @@ export async function handleEmergencyResponse(
         }
 
         else if (data.action === 'reject') {
+
+            emergency.status = EStatus.REJECTED;
 
             const rejectedMessageData = {
                 status: 'rejected',
@@ -341,14 +353,23 @@ export async function joinEmergencyRoom(
 
 export async function getEmergencyLocationUpdate(
     emergencyRoomId: string,
-    emergencyRoom: EmergencyRoomInfo,
     userRole: string,
     ws: WebSocket) {
+
+    const emergencyRoom = emergencyRooms.get(emergencyRoomId);
+    if (!emergencyRoom) {
+        ws.send(JSON.stringify({
+            type: 'error',
+            message: 'Emergency not found',
+            timestamp: new Date().toISOString()
+        }));
+        return;
+    }
 
     switch (userRole) {
         case 'paramedic':
             ws.send(JSON.stringify({
-                type: 'emergencyLocationUpdate',
+                type: 'emergencyLocationUpdates',
                 data: {
                     emergencyId: emergencyRoom.emergencyId,
                     emergencyRoomId,
@@ -361,12 +382,12 @@ export async function getEmergencyLocationUpdate(
 
         case 'patient':
             ws.send(JSON.stringify({
-                type: 'emergencyLocationUpdate',
+                type: 'emergencyLocationUpdates',
                 data: {
                     emergencyId: emergencyRoom.emergencyId,
                     emergencyRoomId,
                     paramedicLocation: emergencyRoom.paramedicLocation,
-                    message: 'Location update for paramedic.'
+                    message: 'Location update for patient.'
                 },
                 timestamp: new Date().toISOString()
             }));
@@ -377,13 +398,13 @@ export async function getEmergencyLocationUpdate(
         case 'doctor':
         case 'admin':
             ws.send(JSON.stringify({
-                type: 'emergencyLocationUpdate',
+                type: 'emergencyLocationUpdates',
                 data: {
                     emergencyId: emergencyRoom.emergencyId,
                     emergencyRoomId,
                     patientLocation: emergencyRoom.patientLocation,
                     paramedicLocation: emergencyRoom.paramedicLocation,
-                    message: 'Location update for paramedic.'
+                    message: 'Location update for doctor, nurse and admin.'
                 },
                 timestamp: new Date().toISOString()
             }));

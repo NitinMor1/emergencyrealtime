@@ -64,7 +64,7 @@ export async function handleLocationUpdate(
             const participants: WebSocket[] = emergencyRoom.participants;
 
             const message: WebSocketResponse = {
-                type: 'emergencylocationUpdates',
+                type: 'emergencyLocationUpdates',
                 timestamp: timestamp,
                 data: {
                     paramedicLocation: emergencyRoom.paramedicLocation,

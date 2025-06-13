@@ -278,7 +278,8 @@ async function handleEmergencyResponseMessage(ws: WebSocket, data: MessageData, 
             ambulance: data.ambulance,
             responderRole: data.responderRole ?? 'doctor',
             action: data.action,
-            notes: data.notes
+            notes: data.notes,
+            rejectionReason: data.rejectionReason
         }, userId);
     }
 }
@@ -296,11 +297,9 @@ async function handleJoinEmergencyRoomMessage(ws: WebSocket, data: MessageData) 
 async function handleGetEmergencyLocationUpdateMessage(ws: WebSocket, data: MessageData) {
     if (data.emergencyId && data.emergencyRoomId && data.userRole) {
         await getEmergencyLocationUpdate(
-            data.emergencyId,
             data.emergencyRoomId,
             data.userRole,
             ws
-
         )
     }
 }

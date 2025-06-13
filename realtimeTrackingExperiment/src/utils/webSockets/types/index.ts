@@ -1,5 +1,5 @@
 // Types for better type safety and modularity
-import { EEmergencyType, ILocation } from '../../../features/emergency/emergencyModel';
+import { EEmergencyType, ILocation, EStatus } from '../../../features/emergency/emergencyModel';
 import WebSocket from 'ws';
 
 // Type aliases for commonly used union types
@@ -33,6 +33,7 @@ export interface ClientInfo {
 }
 
 export interface EmergencyData {
+    status: EStatus;
     emergencyId: string;
     patientId: string;
     patientName?: string;
@@ -77,6 +78,7 @@ export interface EmergencyData {
         timestamp: string;
     }>;
 }
+
 
 export const priorityOrder = {
     'Critical': 0,

@@ -30,6 +30,7 @@ export interface ILocation {
 }
 
 export enum EStatus {
+    REQUESTED = "Requested",
     CANCELLED = "Cancelled",
     REJECTED = "Rejected",
     CREATED = "Created",
