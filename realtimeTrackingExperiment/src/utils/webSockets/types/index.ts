@@ -1,4 +1,5 @@
 // Types for better type safety and modularity
+import { EEmergencyType, ILocation } from '../../../features/emergency/emergencyModel';
 import WebSocket from 'ws';
 
 // Type aliases for commonly used union types
@@ -11,14 +12,14 @@ export type NotificationType = 'emergency' | 'chat' | 'dispatch' | 'consultation
 // WebSocket message types for the message handler
 export type WebSocketMessageType =
     | 'login' | 'logout'
-    | 'joinHospital' | 'locationUpdate' | 'locationRequest'
+    | 'joinHospital' | 'emergencyLocationUpdate' | 'locationRequest'
     | 'sendMessage' | 'joinChatRoom' | 'markAsRead' | 'deleteMessage' | 'typing'
     | 'userOnline' | 'userOffline'
-    | 'emergency_request' | 'emergencyAcceptance' | 'emergencyStatusUpdate'
+    | 'emergencyRequest' | 'emergencyAcceptance' | 'emergencyStatusUpdate'
     | 'callInitiate' | 'callAccept' | 'callReject' | 'callEnd' | 'callAddParticipant'
     | 'notification' | 'heartbeat'
     | 'getHospitalFleet' | 'getHospitalFleetStatus' | 'getHospitalActiveAmbulances'
-    | 'joinTrackingRoom' | 'connect' | 'shareLocation';
+    | 'joinTrackingRoom' | 'connect' | 'shareLocation' | 'joinEmergencyRoom' | 'updateLocation' | 'getEmergencyLocationUpdate';
 
 export interface ClientInfo {
     ws: WebSocket;
@@ -36,22 +37,26 @@ export interface EmergencyData {
     patientId: string;
     patientName?: string;
     patientPhone?: string;
+    patientEmail?: string,
     hospitalId: string;
-    location: {
-        lat: number;
-        lng: number;
-        address?: string;
-    };
-    condition: string;
-    description?: string;
-    priority: Priority;
-    status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled';
+    emergencyLocation: ILocation;
+    emergencyDescription?: string;
+    emergencyType: EEmergencyType;
     timestamp: string;
     requestedBy: string;
     requestedByRole: UserRole;
     responderId?: string;
-    driverId?: string;
-    paramedicId?: string;
+    driver?: {
+        username: string;
+        name: string;
+        employeeId: string;
+    };
+    paramedic?: {
+        username: string;
+        name: string;
+        employeeId: string;
+    };
+    ambulance?: string;
     assignedDepartment?: string;
     estimatedArrival?: string;
     acceptedAt?: string;
@@ -71,22 +76,19 @@ export interface EmergencyData {
         reason?: string;
         timestamp: string;
     }>;
-    completionDetails?: Record<string, any>;
-    vitals?: {
-        heartRate?: number;
-        bloodPressure?: string;
-        temperature?: number;
-        oxygenSaturation?: number;
-        respiratoryRate?: number;
-        glucoseLevel?: number;
-        consciousness?: string;
-    };
+}
+
+export const priorityOrder = {
+    'Critical': 0,
+    'High': 1,
+    'Medium': 2,
+    'Low': 3
 }
 
 export interface EmergencyRoomInfo {
-    paramedic: WebSocket;
-    patient: WebSocket;
-    hospitalResponder: WebSocket;
+    participants: WebSocket[],
+    emergencyId: string,
+    hospitalId: string,
     patientLocation?: {
         timestamp: string;
         lat: string;

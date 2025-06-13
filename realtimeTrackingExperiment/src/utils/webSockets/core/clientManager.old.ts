@@ -310,8 +310,8 @@ export function generateChatRoomId(senderId: string, receiverId: string, hospita
 }
 // Generate unique IDs for chat rooms and emergencies
 export function generateEmergencyRoomId(patientId: string, hospitalId: string, paramedicId: string, driverId: string): string {
-    const participants = [patientId, hospitalId, paramedicId, driverId].sort((a, b) => a.localeCompare(b)).join('_');
-    return `emergency_${participants}`;
+    const participants = [patientId.split("@")[0], hospitalId, paramedicId.split("@")[0], driverId.split("@")[0]].sort((a, b) => a.localeCompare(b)).join('_');
+    return `sos_${participants.toLowerCase()}`;
 }
 
 export function generateEmergencyId(): string {

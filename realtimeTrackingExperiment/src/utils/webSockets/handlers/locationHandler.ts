@@ -20,7 +20,8 @@ export async function handleLocationUpdate(
     data: {
         userId: string;
         userRole: UserRole;
-        hospitalId?: string;
+        hospitalId: string;
+        emergencyId: string;
         location: {
             lat: string;
             lng: string;
@@ -29,7 +30,6 @@ export async function handleLocationUpdate(
     }
 ): Promise<void> {
     try {
-        console.log(data)
         if (!data.emergencyRoomId || !data.userRole) {
             return;
         }
@@ -44,6 +44,15 @@ export async function handleLocationUpdate(
 
         const emergencyRoom = emergencyRooms.get(data.emergencyRoomId);
 
+        if (emergencyRoom?.emergencyId != data.emergencyId || emergencyRoom.hospitalId != data.hospitalId) {
+            ws.send(JSON.stringify({
+                type: 'error',
+                message: 'Emergency room mismatch: invalid emergencyId or hospitalId',
+                timestamp: new Date().toISOString()
+            }));
+            return;
+        }
+
         if (emergencyRoom) {
             if (data.userRole == "paramedic") {
                 emergencyRoom.paramedicLocation = locationData;
@@ -52,10 +61,10 @@ export async function handleLocationUpdate(
                 emergencyRoom.patientLocation = locationData;
             }
 
-            const participants: WebSocket[] = [emergencyRoom.hospitalResponder, emergencyRoom.paramedic, emergencyRoom.patient]
+            const participants: WebSocket[] = emergencyRoom.participants;
 
             const message: WebSocketResponse = {
-                type: 'locationUpdates',
+                type: 'emergencylocationUpdates',
                 timestamp: timestamp,
                 data: {
                     paramedicLocation: emergencyRoom.paramedicLocation,

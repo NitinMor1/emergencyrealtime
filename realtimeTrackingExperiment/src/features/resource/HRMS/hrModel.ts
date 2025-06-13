@@ -46,6 +46,7 @@ export interface IHR {
   dutyRoster: IDutyRoster[];
   allLeaves: ILeaveType[];
   roleAccess?: string[];
+  availabilityStatus?: 'Available' | 'Occupied' | 'On Leave'
 }
 
 export interface ILeaveType {
