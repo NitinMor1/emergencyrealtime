@@ -42,7 +42,7 @@ export async function handleWebSocketMessage(
     data: MessageData,
     userId: string
 ): Promise<void> {
-    console.log('Received WebSocket message:', { type: data.type, userId });
+    console.log('Received WebSocket message:', { type: data.type, userId, data });
 
     if (!userId && !['login'].includes(data.type)) {
         ws.send(JSON.stringify({
@@ -252,7 +252,7 @@ async function handleTypingRequest(ws: WebSocket, data: MessageData, userId: str
 }
 
 async function handleEmergencyRequestMessage(ws: WebSocket, data: MessageData, userId: string): Promise<void> {
-    if (data.patientId && data.hospitalId && data.location && data.condition && data.priority) {
+    if (data.patientId && data.hospitalId && data.emergencyLocation) {
         await handleEmergencyRequest(ws, {
             hospitalId: data.hospitalId,
             emergencyType: data.emergencyType,
@@ -278,7 +278,8 @@ async function handleEmergencyResponseMessage(ws: WebSocket, data: MessageData, 
             ambulance: data.ambulance,
             responderRole: data.responderRole ?? 'doctor',
             action: data.action,
-            notes: data.notes
+            notes: data.notes,
+            rejectionReason: data.rejectionReason
         }, userId);
     }
 }
@@ -296,11 +297,9 @@ async function handleJoinEmergencyRoomMessage(ws: WebSocket, data: MessageData) 
 async function handleGetEmergencyLocationUpdateMessage(ws: WebSocket, data: MessageData) {
     if (data.emergencyId && data.emergencyRoomId && data.userRole) {
         await getEmergencyLocationUpdate(
-            data.emergencyId,
             data.emergencyRoomId,
             data.userRole,
             ws
-
         )
     }
 }
@@ -571,3 +570,21 @@ async function handleConnectRequest(ws: WebSocket, data: MessageData, userId: st
         timestamp: new Date().toISOString()
     }));
 }
+
+/**
+ * 
+{
+          "type": "emergencyRequest",
+          "patientId": "sudhanshujoshi_3542",
+          "hospitalId": "hos_087192",
+          "emergencyLocation": { "latitude": 12.34, "longitude": 56.78, "address": "mohali"},
+          "name": "Nikhil",
+          "phoneNumber": "99999999999",
+          "email": "a@b.com",
+          "emergencyDescription":"patient",
+          "emergencyType":"High",
+          "requestedByRole": "patient"
+}
+ * 
+ * 
+ */
