@@ -30,7 +30,6 @@ import {
     handleJoinTrackingRoom
 } from './ambulanceTrackingHandler';
 import { IAmbulanceTracking } from '../models/ambulanceTrackingModel';
-import { sendEmergencyAlert } from '../core/broadcasting';
 
 export interface MessageData {
     type: WebSocketMessageType;

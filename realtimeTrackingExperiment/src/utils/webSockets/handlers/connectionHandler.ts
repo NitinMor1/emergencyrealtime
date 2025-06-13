@@ -86,6 +86,7 @@ export function handleWebSocketConnection(ws: WebSocket, req: IncomingMessage) {
         removeClient(userId, ws);
     });
 
+
     // Send connection success message
     ws.send(JSON.stringify({
         type: 'connection_established',

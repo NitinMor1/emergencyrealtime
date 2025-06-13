@@ -16,6 +16,7 @@ import {
 import { EEmergencyType, EStatus, ILocation } from '../../../features/emergency/emergencyModel';
 import { IUser } from 'features/account/users/UserModel';
 
+
 // Emergency state management
 const activeEmergencies = new Map<string, EmergencyData>();
 const emergencyQueue = new Map<string, EmergencyData[]>(); // hospitalId -> emergency queue
