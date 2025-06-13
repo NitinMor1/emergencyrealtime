@@ -9,6 +9,7 @@ import {
     paramedicsClients,
     patientClients
 } from './clientManager';
+import { INotification } from '../models/notificationModel';
 
 /**
  * Send message to specific WebSocket connections
@@ -17,10 +18,15 @@ export function sendToClients(clients: ClientInfo[], message: WebSocketResponse)
     const messageStr = JSON.stringify(message);
 
     clients.forEach(client => {
+
+        if (client.ws.readyState === WebSocket.CLOSED) {
+            throw new Error("Client is not connected to web socket")
+        }
         if (client.ws.readyState === WebSocket.OPEN) {
             try {
                 client.ws.send(messageStr);
             } catch (error) {
+
                 console.error(`Failed to send message to client ${client.userId}:`, error);
             }
         }
@@ -34,6 +40,9 @@ export function sendToWebSockets(webSockets: WebSocket[], message: WebSocketResp
     const messageStr = JSON.stringify(message);
 
     webSockets.forEach(ws => {
+        if (ws.readyState === WebSocket.CLOSED) {
+            throw new Error("Client is not connected to web socket")
+        }
         if (ws.readyState === WebSocket.OPEN) {
             try {
                 ws.send(messageStr);
@@ -66,6 +75,15 @@ export function broadcastToHospital(hospitalId: string, message: WebSocketRespon
     const filteredClients = excludeUserId
         ? clients.filter(client => client.userId !== excludeUserId)
         : clients;
+
+    sendToClients(filteredClients, message);
+}
+export function broadcastToHospitalRoles(hospitalId: string, roles: UserRole[], message: WebSocketResponse, excludeUserId?: string): void {
+    const clients = getClientsByHospital(hospitalId);
+    const clientsHavingRoles = clients.filter(client => roles.includes(client.role));
+    const filteredClients = excludeUserId
+        ? clientsHavingRoles.filter(client => client.userId !== excludeUserId)
+        : clientsHavingRoles;
 
     sendToClients(filteredClients, message);
 }
@@ -183,26 +201,10 @@ export function sendTargetedNotification(
 export function sendEmergencyAlert(
     hospitalId: string,
     message: WebSocketResponse,
-    includeDepartments?: string[]
 ): void {
     // // Emergency-capable roles
     const emergencyRoles: UserRole[] = ['doctor', 'nurse', 'admin', 'hospital'];
-
-    // if (includeDepartments && includeDepartments.length > 0) {        // Send to specific departments
-    //     includeDepartments.forEach(dept => {
-    //         sendTargetedNotification(emergencyRoles, message, hospitalId, dept);
-    //     });
-    // } else {
-    //     // Send to all emergency-capable roles in the hospital
-    //     sendTargetedNotification(emergencyRoles, message, hospitalId);
-    // }
-
-    // Also notify paramedics assigned to this hospital
-    // broadcastToParamedics(hospitalId, message);
-
-    console.log("hospitalId: ", hospitalId);
-    console.log("message: ", message)
-    sendTargetedNotification([emergencyRoles[3]], message, hospitalId);
+    sendTargetedNotification(emergencyRoles, message, hospitalId);
 
 }
 

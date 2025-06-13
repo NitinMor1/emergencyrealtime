@@ -7,9 +7,11 @@ import {
     handleTypingStatus
 } from './chatHandler';
 import {
+    getEmergencyLocationUpdate,
     handleEmergencyRequest,
     handleEmergencyResponse,
-    handleEmergencyStatusUpdate,
+    joinEmergencyRoom,
+    // handleEmergencyStatusUpdate,
 } from './emergencyHandler';
 import {
     handleLocationUpdate,
@@ -38,7 +40,7 @@ export interface MessageData {
 export async function handleWebSocketMessage(
     ws: WebSocket,
     data: MessageData,
-    userId: string | null
+    userId: string
 ): Promise<void> {
     console.log('Received WebSocket message:', { type: data.type, userId });
 
@@ -55,10 +57,6 @@ export async function handleWebSocketMessage(
         switch (data.type) {
             case 'login':
                 await handleLogin(ws, data);
-                break;
-
-            case 'locationUpdate':
-                await handleLocationUpdateMessage(ws, data, userId!);
                 break;
 
             case 'locationRequest':
@@ -93,12 +91,24 @@ export async function handleWebSocketMessage(
                 await handleUserOffline(userId!, data.hospitalId, ws);
                 break;
 
-            case 'emergency_request':
+            case 'updateLocation':
+                await handleEmergencyLocationUpdateMessage(ws, data, userId!);
+                break;
+
+            case 'getEmergencyLocationUpdate':
+                await handleGetEmergencyLocationUpdateMessage(ws, data)
+                break;
+
+            case 'emergencyRequest':
                 await handleEmergencyRequestMessage(ws, data, userId!)
                 break;
 
             case 'emergencyAcceptance':
                 await handleEmergencyResponseMessage(ws, data, userId!);
+                break;
+
+            case 'joinEmergencyRoom':
+                await handleJoinEmergencyRoomMessage(ws, data)
                 break;
 
             case 'emergencyStatusUpdate':
@@ -166,11 +176,12 @@ export async function handleWebSocketMessage(
     }
 }
 
-async function handleLocationUpdateMessage(ws: WebSocket, data: MessageData, userId: string): Promise<void> {
+async function handleEmergencyLocationUpdateMessage(ws: WebSocket, data: MessageData, userId: string): Promise<void> {
     if (data.userRole && data.location) {
         await handleLocationUpdate(ws, {
             userId,
             userRole: data.userRole,
+            emergencyId: data.emergencyId,
             hospitalId: data.hospitalId,
             location: data.location,
             emergencyRoomId: data.emergencyRoomId
@@ -243,13 +254,14 @@ async function handleTypingRequest(ws: WebSocket, data: MessageData, userId: str
 async function handleEmergencyRequestMessage(ws: WebSocket, data: MessageData, userId: string): Promise<void> {
     if (data.patientId && data.hospitalId && data.location && data.condition && data.priority) {
         await handleEmergencyRequest(ws, {
-            patientId: data.patientId,
             hospitalId: data.hospitalId,
-            location: data.location,
-            condition: data.condition,
-            priority: data.priority,
-            description: data.description,
-            vitals: data.vitals,
+            emergencyType: data.emergencyType,
+            emergencyDescription: data.emergencyDescription,
+            name: data.name,
+            phoneNumber: data.phoneNumber,
+            email: data.email,
+            patientId: data.patientId,
+            emergencyLocation: data.emergencyLocation,
             requestedBy: userId,
             requestedByRole: data.requestedByRole ?? 'patient'
         });
@@ -260,27 +272,50 @@ async function handleEmergencyResponseMessage(ws: WebSocket, data: MessageData, 
     if (data.emergencyId && data.action) {
         await handleEmergencyResponse(ws, {
             emergencyId: data.emergencyId,
-            driverId: data.driverId,
-            paramedicId: data.paramedicId,
+            emergencyRoomId: data.emergencyRoomId,
+            driver: data.driver,
+            paramedic: data.paramedic,
+            ambulance: data.ambulance,
             responderRole: data.responderRole ?? 'doctor',
             action: data.action,
-            estimatedArrival: data.estimatedArrival,
-            assignedDepartment: data.assignedDepartment,
             notes: data.notes
         }, userId);
     }
 }
 
+async function handleJoinEmergencyRoomMessage(ws: WebSocket, data: MessageData) {
+    if (data.emergencyId && data.emergencyRoomId) {
+        await joinEmergencyRoom(
+            data.emergencyId,
+            data.emergencyRoomId,
+            ws
+        )
+    }
+}
+
+async function handleGetEmergencyLocationUpdateMessage(ws: WebSocket, data: MessageData) {
+    if (data.emergencyId && data.emergencyRoomId && data.userRole) {
+        await getEmergencyLocationUpdate(
+            data.emergencyId,
+            data.emergencyRoomId,
+            data.userRole,
+            ws
+
+        )
+    }
+}
+
+
 async function handleEmergencyStatusUpdateMessage(ws: WebSocket, data: MessageData, userId: string): Promise<void> {
     if (data.emergencyId && data.status) {
-        await handleEmergencyStatusUpdate(ws, {
-            emergencyId: data.emergencyId,
-            status: data.status,
-            updatedBy: userId,
-            updatedByRole: data.updatedByRole ?? 'doctor',
-            notes: data.notes,
-            completionDetails: data.completionDetails
-        });
+        // await handleEmergencyStatusUpdate(ws, {
+        //     emergencyId: data.emergencyId,
+        //     status: data.status,
+        //     updatedBy: userId,
+        //     updatedByRole: data.updatedByRole ?? 'doctor',
+        //     notes: data.notes,
+        //     completionDetails: data.completionDetails
+        // });
     }
 }
 

@@ -1,36 +1,35 @@
 import { ObjectId } from "mongoose";
-import { IPatient } from "../account/patients/PatientModel";
 
 export interface IEmergency {
     hospitalId: string;
-    creatorId:string;
     emergencyId: string;
+    emergencyRoomId: string;
     emergencyType: string;
-    emergencyLocation: string;
+    emergencyDescription: string;
+    emergencyLocation: ILocation;
     emergencyTime: string;
-    driver: string | ObjectId; // driver Id, 
-    vehicleNumber: string;
-    vehicleLocation: string;
-    available: boolean;
     patient: {
-        name:IPatient["name"];
-        username: IPatient["username"];
-        phoneNumber: IPatient["phoneNumber"];
-        email: IPatient["email"];
+        name: string;
+        username: string;
+        phoneNumber: string;
+        email: string;
     };
-    isCompleted: boolean;
+    status: EStatus,
     completedTime: string;
-    assigneeId: string | ObjectId; // paramedic Id
-    isRequestRejected?: boolean | undefined;
+    creatorId?: string; // HPlus creator id
+    paramedicId?: string; // paramedic Id
+    driverId?: string; // driver Id, 
+    ambulanceNumber?: string;
+    rejectionReason?: string
 }
 
 export interface ILocation {
-    latitude: number;
-    longitude: number;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
 }
 
 export enum EStatus {
-    REQUESTED = "Requested",
     CANCELLED = "Cancelled",
     REJECTED = "Rejected",
     CREATED = "Created",
@@ -40,12 +39,6 @@ export enum EStatus {
 export enum EEmergencyType {
     LOW = "Low",
     MEDIUM = "Medium",
+    HIGH = "High",
     CRITICAL = "Critical",
-    ACCIDENT = "Accident" // Added based on sample data
-}
-
-export interface IRejection {
-    isRequestRejected: boolean;
-    rejectedBy: string;
-    reason: string;
 }

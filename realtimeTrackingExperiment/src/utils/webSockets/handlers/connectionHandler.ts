@@ -1,9 +1,9 @@
 import WebSocket from 'ws';
 import { IncomingMessage } from 'http';
 import { ClientInfo, UserRole } from '../types';
-import { 
-    addClient, 
-    removeClient, 
+import {
+    addClient,
+    removeClient,
     logClientConnections
 } from '../core/clientManager';
 
@@ -36,7 +36,7 @@ export function handleWebSocketConnection(ws: WebSocket, req: IncomingMessage) {
     }
 
     const validRoles: UserRole[] = ['hospital', 'paramedic', 'patient', 'doctor', 'nurse', 'admin', 'receptionist', 'technician', 'pharmacist'];
-    
+
     if (!role || !validRoles.includes(role as UserRole)) {
         console.error('WebSocket connection rejected: Invalid or missing role');
         ws.send(JSON.stringify({
@@ -49,6 +49,7 @@ export function handleWebSocketConnection(ws: WebSocket, req: IncomingMessage) {
 
     // For hospital staff roles, hospitalId is required
     const hospitalStaffRoles: UserRole[] = ['hospital', 'doctor', 'nurse', 'admin', 'receptionist', 'technician', 'pharmacist'];
+
     if (hospitalStaffRoles.includes(role as UserRole) && !hospitalId) {
         console.error(`WebSocket connection rejected: ${role} role requires hospitalId`);
         ws.send(JSON.stringify({

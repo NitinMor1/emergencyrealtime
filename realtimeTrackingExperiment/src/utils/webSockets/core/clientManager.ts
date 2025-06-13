@@ -384,7 +384,7 @@ export function generateChatRoomId(senderId: string, receiverId: string, hospita
 }
 
 export function generateEmergencyId(): string {
-    return `emergency_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    return `sos_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 }
 
 export function generateCallRoomId(patientId: string, doctorId: string): string {

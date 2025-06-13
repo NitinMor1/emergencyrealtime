@@ -15,7 +15,7 @@ export async function generateJWTToken(hospitalId: string, passkey: string): Pro
     const payLoad = { hospitalId, passkey }
     console.log(process.env.JWT_SECRET_KEY)
     console.log(process.env.JWT_EXPIRE_TIME)
-    return jwt.sign(payLoad, process.env.JWT_SECRET_KEY as string , { expiresIn: process.env.JWT_EXPIRE_TIME as string })
+    return jwt.sign(payLoad, process.env.JWT_SECRET_KEY as string || "hplusbackendsecretkey", { expiresIn: "1d" })
 }
 export async function generateRefreshToken(hospitalId: string, passkey: string): Promise<string> {
     const payLoad = { hospitalId, passkey }

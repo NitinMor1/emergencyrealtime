@@ -1,26 +1,17 @@
 import { Router } from "express";
-import {
-  getEmergency,
-  createEmergency,
-  updateEmergency,
-  deleteEmergency,
-  getAmbulanceList,
-} from "./emergencyController";
+import { createEmergency, createPartialEmergency, deleteEmergency, getAvailableResources, updateEmergencyAssignees, updateEmergencyStatus, getEmergency } from "./emergencyController";
 
-// import { locationUpdate } from "./locationReceiver/socketIO";
 import { verifyJWT } from "../auth/ctrl_func";
-import { pullEmergencyNotification } from "./emergencyNotification/emergencyNotification";
 
 const emergencyRouter = Router();
 
-emergencyRouter.get("/getEmergency", verifyJWT, getEmergency);
-emergencyRouter.post("/createEmergency",verifyJWT,  createEmergency);
-emergencyRouter.post("/updateEmergency", verifyJWT, updateEmergency);
-emergencyRouter.post("/deleteEmergency", verifyJWT, deleteEmergency);
-emergencyRouter.get("/getAmbulanceList", verifyJWT, getAmbulanceList);
+emergencyRouter.route("/createEmergency").post(verifyJWT, createEmergency)
+emergencyRouter.route("/createAutoAssignedEmergency").post(verifyJWT, createPartialEmergency);
+emergencyRouter.route("/updateAssignees").put(verifyJWT, updateEmergencyAssignees);
+emergencyRouter.route("/get").get(verifyJWT, getEmergency);
+emergencyRouter.route("/delete").delete(verifyJWT, deleteEmergency);
+emergencyRouter.route("/updateEmergencyStatus").put(verifyJWT, updateEmergencyStatus);
+emergencyRouter.route("/getAvailableResources").get(verifyJWT, getAvailableResources);
 
-// emergencyRouter.route("/locationUpdate").post(locationUpdate);
 
-
-emergencyRouter.get("/getEmergencyNotification", verifyJWT, pullEmergencyNotification)
 export default emergencyRouter;
