@@ -9,6 +9,8 @@ import {
     paramedicsClients,
     patientClients
 } from './clientManager';
+import { markAsDelivered } from '../models/notificationModel';
+import { clearAllUserNotifications, markAllAsDelivered } from '../services/notificationServices';
 
 
 /**
@@ -22,6 +24,8 @@ export function sendToClients(clients: ClientInfo[], message: WebSocketResponse)
         if (client.ws.readyState === WebSocket.OPEN) {
             try {
                 client.ws.send(messageStr);
+                console.log("clear emergency")
+                clearAllUserNotifications(client.userId);
             } catch (error) {
 
                 console.error(`Failed to send message to client ${client.userId}:`, error);
