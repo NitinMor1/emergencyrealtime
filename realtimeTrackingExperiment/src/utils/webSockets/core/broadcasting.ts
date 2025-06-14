@@ -9,7 +9,9 @@ import {
     paramedicsClients,
     patientClients
 } from './clientManager';
-import { INotification } from '../models/notificationModel';
+import { markAsDelivered } from '../models/notificationModel';
+import { clearAllUserNotifications, markAllAsDelivered } from '../services/notificationServices';
+
 
 /**
  * Send message to specific WebSocket connections
@@ -19,12 +21,11 @@ export function sendToClients(clients: ClientInfo[], message: WebSocketResponse)
 
     clients.forEach(client => {
 
-        if (client.ws.readyState === WebSocket.CLOSED) {
-            throw new Error("Client is not connected to web socket")
-        }
         if (client.ws.readyState === WebSocket.OPEN) {
             try {
                 client.ws.send(messageStr);
+                console.log("clear emergency")
+                clearAllUserNotifications(client.userId);
             } catch (error) {
 
                 console.error(`Failed to send message to client ${client.userId}:`, error);
@@ -40,9 +41,6 @@ export function sendToWebSockets(webSockets: WebSocket[], message: WebSocketResp
     const messageStr = JSON.stringify(message);
 
     webSockets.forEach(ws => {
-        if (ws.readyState === WebSocket.CLOSED) {
-            throw new Error("Client is not connected to web socket")
-        }
         if (ws.readyState === WebSocket.OPEN) {
             try {
                 ws.send(messageStr);

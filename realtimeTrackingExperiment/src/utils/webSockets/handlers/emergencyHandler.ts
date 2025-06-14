@@ -1,6 +1,6 @@
 // Emergency booking and dispatch system with role-based isolation
 import WebSocket from 'ws';
-import { EmergencyData, UserRole, Priority, WebSocketResponse, EmergencyRoomInfo, priorityOrder } from '../types';
+import { EmergencyData, UserRole, WebSocketResponse, EmergencyRoomInfo, priorityOrder } from '../types';
 import {
     sendEmergencyAlert,
     broadcastToUser,
@@ -15,6 +15,8 @@ import {
 } from '../core/clientManager';
 import { EEmergencyType, EStatus, ILocation } from '../../../features/emergency/emergencyModel';
 import { IUser } from 'features/account/users/UserModel';
+import { createNotification } from '../services/notificationServices';
+
 
 // Emergency state management
 const activeEmergencies = new Map<string, EmergencyData>();
@@ -98,6 +100,19 @@ export async function handleEmergencyRequest(
             data: emergencyData,
             timestamp
         };
+
+        createNotification(
+            [data.hospitalId],
+            "EMERGENCY_ALERT",
+            'New Emergency Request',
+            `Emergency request from ${data.name} (${data.emergencyType})`,
+            {
+                userRoles: emergencyRoles,
+                hospitalId: data.hospitalId,
+                priority: data.emergencyType as EEmergencyType,
+                metadata: emergencyData,
+            }
+        )
 
         // Send emergency alert to staff having creation authority
         sendEmergencyAlert(data.hospitalId, alertMessage);
@@ -219,6 +234,24 @@ export async function handleEmergencyResponse(
                 },
                 timestamp
             }, userId);
+
+
+
+            createNotification(
+                [
+                    data.paramedic.username
+                ],
+                "EMERGENCY_ASSIGNMENT",
+                'Emergency Assigned',
+                `You have been assigned to an emergency (${emergency.emergencyType}) for patient ${emergency.patientName}.`,
+                {
+                    userRoles: ['paramedic'],
+                    metadata: {
+                        emergencyRoomId: data.emergencyRoomId,
+                        ...emergency
+                    }
+                }
+            )
 
             broadcastToParamedic(emergency.hospitalId, {
                 type: 'emergencyAssigned',

@@ -6,6 +6,8 @@ import {
     removeClient,
     logClientConnections
 } from '../core/clientManager';
+import { handleUserReconnection } from '../services/notificationServices';
+
 
 export function handleWebSocketConnection(ws: WebSocket, req: IncomingMessage) {
     // Extract parameters from query
@@ -86,6 +88,7 @@ export function handleWebSocketConnection(ws: WebSocket, req: IncomingMessage) {
         removeClient(userId, ws);
     });
 
+
     // Send connection success message
     ws.send(JSON.stringify({
         type: 'connection_established',
@@ -99,6 +102,8 @@ export function handleWebSocketConnection(ws: WebSocket, req: IncomingMessage) {
         },
         timestamp: new Date().toISOString()
     }));
+
+    handleUserReconnection(clientInfo, ws);
 
     logClientConnections();
 

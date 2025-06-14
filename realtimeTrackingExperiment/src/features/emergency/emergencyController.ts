@@ -4,6 +4,7 @@ import { IEmergency, EStatus } from "./emergencyModel";
 import { IHospital } from "../auth/HospitalModel";
 import { IEmployee, IADMIN } from "../resource/HRMS/hrModel";
 import { v4 as uuidv4 } from "uuid";
+import { param } from "express-validator";
 
 // Helper function to generate room id
 export const generateEmergencyRoomId = (hospitalId: string): string => {
@@ -362,16 +363,95 @@ export const getEmergency = async (req: Request, res: Response) => {
           message: "Emergency not found"
         });
       }
+
+
+      const employeeCol = await getCollection<IEmployee>("Employee", hospitalId.toString());
+
+      const [paramedic, driver] = await Promise.all([
+        emergency.paramedicId
+          ? employeeCol.findOne({ "ContactDetails.username": emergency.paramedicId })
+          : null,
+        emergency.driverId
+          ? employeeCol.findOne({ "ContactDetails.username": emergency.driverId })
+          : null
+      ]);
+
+      const paramedicDetails = paramedic
+        ? {
+          username: paramedic.ContactDetails.username,
+          name: paramedic.ContactDetails.name,
+          employeeId: paramedic.ContactDetails.employeeId,
+          phoneNumber: paramedic.ContactDetails.phoneNumber
+        }
+        : null;
+
+      const driverDetails = driver
+        ? {
+          username: driver.ContactDetails.username,
+          name: driver.ContactDetails.name,
+          employeeId: driver.ContactDetails.employeeId,
+          phoneNumber: driver.ContactDetails.phoneNumber
+        }
+        : null;
       return res.status(200).json({
         success: true,
-        data: emergency
+        data: {
+          ...emergency,
+          paramedic: paramedicDetails,
+          driver: driverDetails,
+
+        }
       });
     }
     const emergencies = await emergencyColl.find({}).toArray();
+
+    const employeeCol = await getCollection<IEmployee>("Employee", hospitalId.toString());
+    const emergenciesWithDetails = await Promise.all(
+      emergencies.map(async (emergency) => {
+        const [paramedic, driver] = await Promise.all([
+          emergency.paramedicId
+            ? employeeCol.findOne({ "ContactDetails.username": emergency.paramedicId })
+            : null,
+          emergency.driverId
+            ? employeeCol.findOne({ "ContactDetails.username": emergency.driverId })
+            : null
+        ]);
+
+        const paramedicDetails = paramedic
+          ? {
+            username: paramedic.ContactDetails.username,
+            name: paramedic.ContactDetails.name,
+            employeeId: paramedic.ContactDetails.employeeId,
+            phoneNumber: paramedic.ContactDetails.phoneNumber
+          }
+          : null;
+
+        const driverDetails = driver
+          ? {
+            username: driver.ContactDetails.username,
+            name: driver.ContactDetails.name,
+            employeeId: driver.ContactDetails.employeeId,
+            phoneNumber: driver.ContactDetails.phoneNumber
+          }
+          : null;
+
+        return {
+          ...emergency,
+          paramedic: paramedicDetails,
+          driver: driverDetails
+        };
+      })
+    );
+
     return res.status(200).json({
       success: true,
-      data: emergencies
+      data: emergenciesWithDetails
     });
+
+    // return res.status(200).json({
+    //   success: true,
+    //   data: emergencies
+    // });
 
   } catch (error) {
     console.error("Error fetching emergency:", error);
