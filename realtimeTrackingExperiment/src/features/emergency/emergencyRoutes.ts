@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createEmergency, createPartialEmergency, deleteEmergency, getAvailableResources, updateEmergencyAssignees, updateEmergencyStatus, getEmergency } from "./emergencyController";
+import { createEmergency, createPartialEmergency, deleteEmergency, getAvailableResources, updateEmergencyAssignees, updateEmergencyStatus, getEmergency, getEmergencyById, getAssignedEmergency } from "./emergencyController";
 
 import { verifyJWT } from "../auth/ctrl_func";
 
@@ -13,5 +13,11 @@ emergencyRouter.route("/delete").delete(verifyJWT, deleteEmergency);
 emergencyRouter.route("/updateEmergencyStatus").put(verifyJWT, updateEmergencyStatus);
 emergencyRouter.route("/getAvailableResources").get(verifyJWT, getAvailableResources);
 
+
+// will be shifting to ME
+emergencyRouter.route("/getEmergencyById").get(verifyJWT, getEmergencyById)
+
+// will be shifting to M+
+emergencyRouter.route("/getAssignedEmergency").get(verifyJWT, getAssignedEmergency)
 
 export default emergencyRouter;
