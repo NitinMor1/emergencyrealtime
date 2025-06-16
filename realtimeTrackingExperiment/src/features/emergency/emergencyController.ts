@@ -5,6 +5,7 @@ import { IHospital } from "../auth/HospitalModel";
 import { IEmployee, IADMIN } from "../resource/HRMS/hrModel";
 import { v4 as uuidv4 } from "uuid";
 import { param } from "express-validator";
+import { addEmployee } from "features/resource/HRMS/hrContoller";
 
 // Helper function to generate room id
 export const generateEmergencyRoomId = (hospitalId: string): string => {
@@ -510,16 +511,61 @@ export const getEmergencyForME = async (req: Request, res: Response) => {
     const emergencyColl = await getCollection<IEmergency>("Emergency", null);
 
     const emergency = await emergencyColl.find({ "patient.username": username }).toArray();
-    if (!emergency) {
+
+    if (!emergency || emergency.length == 0) {
       return res.status(404).json({
         success: false,
         message: "Emergency not found"
       });
     }
 
+
+    const data = [];
+
+    for (let e of emergency) {
+
+      let assignedParamedic = null;
+      let assignedDriver = null;
+
+      if (e.paramedicId && e.driverId && e.ambulanceNumber) {
+        const employeeColl = await getCollection<IEmployee>("Employee", e.hospitalId);
+        assignedParamedic = await employeeColl.findOne(
+          {
+            "ContactDetails.username": e.paramedicId
+          },
+        )
+
+        assignedDriver = await employeeColl.findOne(
+          {
+            "ContactDetails.username": e.driverId
+          },
+        )
+      }
+
+      const temp = {
+        ...e,
+        assignedResources: {
+          paramedic: {
+            username: assignedParamedic?.ContactDetails.username || "",
+            name: assignedParamedic?.ContactDetails.name || "",
+            employeeId: assignedParamedic?.ContactDetails.employeeId || "",
+            phoneNumber: assignedParamedic?.ContactDetails.phoneNumber || ""
+          },
+          driver: {
+            username: assignedDriver?.ContactDetails.username || "",
+            name: assignedDriver?.ContactDetails.name || "",
+            employeeId: assignedDriver?.ContactDetails.employeeId || "",
+            phoneNumber: assignedDriver?.ContactDetails.phoneNumber || ""
+          },
+          ambulance: e.ambulanceNumber || ""
+        }
+      };
+      data.push(temp);
+    }
+
     return res.status(200).json({
       success: true,
-      data: emergency
+      data: data
     });
   } catch (error) {
     console.error("Error fetching emergency:", error);
@@ -1062,3 +1108,72 @@ export const getAvailableResources = async (req: Request, res: Response) => {
 };
 
 
+export const getPendingEmergency = async (req: Request, res: Response) => {
+  try {
+    const { hospitalId } = req.query;
+
+    if (!hospitalId) {
+      return res.status(400).json({
+        success: false,
+        message: "Hospital ID is required"
+      });
+    }
+
+    const emergencyColl = await getCollection<IEmergency>("Emergency", null);
+
+    const emergencies = await emergencyColl.find(
+      {
+        hospitalId: hospitalId.toString(),
+        status: EStatus.REQUESTED
+      }
+    ).toArray()
+
+    if (emergencies.length == 0) {
+      return res.status(404).json(
+        {
+          success: false,
+          message: "Emergencies not found"
+        }
+      )
+    }
+
+
+    const data = [];
+
+    for (let e of emergencies) {
+
+      const temp = {
+        ...e,
+        assignedResources: {
+          paramedic: {
+            username: "",
+            name: "",
+            employeeId: "",
+            phoneNumber: ""
+          },
+          driver: {
+            username: "",
+            name: "",
+            employeeId: "",
+            phoneNumber: ""
+          },
+          ambulance: ""
+        }
+      };
+      data.push(temp);
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: data
+    });
+
+
+  } catch (error) {
+    console.error("Error fetching available resources:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+}
