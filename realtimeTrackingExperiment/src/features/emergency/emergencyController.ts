@@ -462,20 +462,20 @@ export const getEmergency = async (req: Request, res: Response) => {
   }
 };
 
-export const getEmergencyById = async (req: Request, res: Response) => {
+export const getEmergencyForME = async (req: Request, res: Response) => {
   try {
-    const { hospitalId, emergencyId } = req.query;
+    const { username } = req.query;
 
-    if (!hospitalId || !emergencyId) {
+    if (!username) {
       return res.status(400).json({
         success: false,
         message: "Hospital ID is required"
       });
     }
 
-    const emergencyColl = await getCollection<IEmergency>("Emergency", hospitalId.toString());
+    const emergencyColl = await getCollection<IEmergency>("Emergency", null);
 
-    const emergency = await emergencyColl.findOne({ emergencyId: emergencyId.toString() });
+    const emergency = await emergencyColl.findOne({ "patient.username": username });
     if (!emergency) {
       return res.status(404).json({
         success: false,
@@ -483,45 +483,9 @@ export const getEmergencyById = async (req: Request, res: Response) => {
       });
     }
 
-
-    const employeeCol = await getCollection<IEmployee>("Employee", hospitalId.toString());
-
-    const [paramedic, driver] = await Promise.all([
-      emergency.paramedicId
-        ? employeeCol.findOne({ "ContactDetails.username": emergency.paramedicId })
-        : null,
-      emergency.driverId
-        ? employeeCol.findOne({ "ContactDetails.username": emergency.driverId })
-        : null
-    ]);
-
-    const paramedicDetails = paramedic
-      ? {
-        username: paramedic.ContactDetails.username,
-        name: paramedic.ContactDetails.name,
-        employeeId: paramedic.ContactDetails.employeeId,
-        phoneNumber: paramedic.ContactDetails.phoneNumber
-      }
-      : null;
-
-    const driverDetails = driver
-      ? {
-        username: driver.ContactDetails.username,
-        name: driver.ContactDetails.name,
-        employeeId: driver.ContactDetails.employeeId,
-        phoneNumber: driver.ContactDetails.phoneNumber
-      }
-      : null;
-
     return res.status(200).json({
       success: true,
-      data: {
-        ...emergency,
-        paramedic: paramedicDetails,
-        driver: driverDetails,
-        ambulance: emergency.ambulanceNumber
-
-      }
+      data: emergency
     });
   } catch (error) {
     console.error("Error fetching emergency:", error);
@@ -534,9 +498,9 @@ export const getEmergencyById = async (req: Request, res: Response) => {
 
 export const getAssignedEmergency = async (req: Request, res: Response) => {
   try {
-    const { hospitalId, username, emergencyId } = req.query;
+    const { hospitalId, username } = req.query;
 
-    if (!hospitalId) {
+    if (!hospitalId || !username) {
       return res.status(400).json({
         success: false,
         message: "Hospital ID is required"
@@ -545,13 +509,10 @@ export const getAssignedEmergency = async (req: Request, res: Response) => {
 
     const emergencyColl = await getCollection<IEmergency>("Emergency", hospitalId.toString());
 
-    const query: { $or: Array<Record<string, any>> } = { $or: [] };
 
-    if (emergencyId) query.$or.push({ emergencyId: emergencyId.toString() })
-
-    if (username) query.$or.push({ username, status: EStatus.CREATED });
-
-    const emergency = await emergencyColl.findOne(query);
+    const emergency = await emergencyColl.findOne({
+      paramedicId: username
+    });
 
     if (!emergency) {
       return res.status(404).json({
