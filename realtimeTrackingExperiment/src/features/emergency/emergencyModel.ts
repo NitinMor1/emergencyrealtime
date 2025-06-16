@@ -1,21 +1,20 @@
-import { ObjectId } from "mongoose";
 
 export interface IEmergency {
     hospitalId: string;
     emergencyId: string;
-    emergencyRoomId: string;
     emergencyType: string;
     emergencyDescription: string;
     emergencyLocation: ILocation;
     emergencyTime: string;
-    patient: {
+    patient?: {
         name: string;
         username: string;
         phoneNumber: string;
         email: string;
     };
     status: EStatus,
-    completedTime: string;
+    emergencyRoomId?: string;
+    completedTime?: string;
     creatorId?: string; // HPlus creator id
     paramedicId?: string; // paramedic Id
     driverId?: string; // driver Id, 

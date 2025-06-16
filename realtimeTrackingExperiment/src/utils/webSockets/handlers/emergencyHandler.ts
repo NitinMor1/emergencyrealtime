@@ -13,9 +13,10 @@ import {
     paramedicsClients,
     patientClients
 } from '../core/clientManager';
-import { EEmergencyType, EStatus, ILocation } from '../../../features/emergency/emergencyModel';
+import { EEmergencyType, EStatus, IEmergency, ILocation } from '../../../features/emergency/emergencyModel';
 import { IUser } from 'features/account/users/UserModel';
 import { createNotification } from '../services/notificationServices';
+import { getCollection } from '../../../db/db';
 
 
 // Emergency state management
@@ -62,6 +63,26 @@ export async function handleEmergencyRequest(
             requestedBy: data.requestedBy,
             requestedByRole: data.requestedByRole as UserRole
         };
+
+        const emergencyColl = await getCollection<IEmergency>("Emergency", null);
+
+        await emergencyColl.insertOne(
+            {
+                hospitalId: data.hospitalId,
+                emergencyId: emergencyId,
+                emergencyDescription: data.emergencyDescription,
+                emergencyLocation: data.emergencyLocation,
+                emergencyTime: timestamp,
+                emergencyType: data.emergencyType,
+                patient: {
+                    name: data.name,
+                    email: data.email,
+                    phoneNumber: data.phoneNumber,
+                    username: data.patientId
+                },
+                status: EStatus.REQUESTED
+            }
+        )
 
         // Store emergency
         activeEmergencies.set(emergencyId, emergencyData);
@@ -270,6 +291,18 @@ export async function handleEmergencyResponse(
 
         else if (data.action === 'reject') {
 
+            const emergencyCol = await getCollection<IEmergency>("Emergency", null);
+
+            await emergencyCol.updateOne(
+                {
+                    emergencyId: data.emergencyId
+                }, {
+                $set: {
+                    status: EStatus.REJECTED,
+                    rejectionReason: data.rejectionReason
+                }
+            }
+            )
             emergency.status = EStatus.REJECTED;
 
             const rejectedMessageData = {

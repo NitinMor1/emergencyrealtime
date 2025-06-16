@@ -131,26 +131,60 @@ export const createPartialEmergency = async (req: Request, res: Response) => {
       });
     }
 
-    const emergencyCol = await getCollection<IEmergency>("Emergency", hospitalId);
+    const emergencyCol = await getCollection<IEmergency>("Emergency", null);
 
-    const emergency: IEmergency = {
-      hospitalId,
-      emergencyId,
-      emergencyRoomId: generateEmergencyRoomId(hospitalId),
-      emergencyType,
-      emergencyDescription,
-      emergencyLocation,
-      emergencyTime,
-      patient,
-      status: EStatus.CREATED,
-      completedTime: "",
-      creatorId,
-      paramedicId: availableParamedic.ContactDetails.username?.toString(),
-      driverId: availableDriver.ContactDetails.username?.toString(),
-      ambulanceNumber: availableAmbulance
-    };
+    const requestedEmergency = await emergencyCol.findOne(
+      {
+        emergencyId: emergencyId
+      }
+    )
 
-    await emergencyCol.insertOne(emergency);
+    let emergency;
+
+    if (requestedEmergency) {
+      emergency = await emergencyCol.findOneAndUpdate(
+        {
+          emergencyId
+        },
+        {
+          $set: {
+            status: EStatus.CREATED,
+            emergencyRoomId: generateEmergencyRoomId(hospitalId),
+            creatorId,
+            paramedicId: availableParamedic.ContactDetails.username?.toString(),
+            driverId: availableDriver.ContactDetails.username?.toString(),
+            ambulanceNumber: availableAmbulance
+          }
+        },
+        {
+          returnDocument: "after"
+        }
+      )
+    }
+
+    else {
+      emergency = {
+        hospitalId,
+        emergencyId,
+        emergencyRoomId: generateEmergencyRoomId(hospitalId),
+        emergencyType,
+        emergencyDescription,
+        emergencyLocation,
+        emergencyTime,
+        patient,
+        status: EStatus.CREATED,
+        completedTime: "",
+        creatorId,
+        paramedicId: availableParamedic.ContactDetails.username?.toString(),
+        driverId: availableDriver.ContactDetails.username?.toString(),
+        ambulanceNumber: availableAmbulance
+      };
+
+      const result = await emergencyCol.insertOne(emergency);
+
+      emergency = { ...emergency, _id: result.insertedId }
+    }
+
 
     // Update employee availability to 'Occupied'
     if (!availableParamedic.ContactDetails.username) {
@@ -203,7 +237,7 @@ export const updateEmergencyAssignees = async (req: Request, res: Response) => {
       });
     }
 
-    const emergencyCol = await getCollection<IEmergency>("Emergency", hospitalId.toString());
+    const emergencyCol = await getCollection<IEmergency>("Emergency", null);
     const currentEmergency = await emergencyCol.findOne({ emergencyId: emergencyId.toString() });
 
     if (!currentEmergency) {
@@ -353,7 +387,7 @@ export const getEmergency = async (req: Request, res: Response) => {
       });
     }
 
-    const emergencyColl = await getCollection<IEmergency>("Emergency", hospitalId.toString());
+    const emergencyColl = await getCollection<IEmergency>("Emergency", null);
 
     if (emergencyId) {
       const emergency = await emergencyColl.findOne({ emergencyId: emergencyId.toString() });
@@ -475,7 +509,7 @@ export const getEmergencyForME = async (req: Request, res: Response) => {
 
     const emergencyColl = await getCollection<IEmergency>("Emergency", null);
 
-    const emergency = await emergencyColl.findOne({ "patient.username": username });
+    const emergency = await emergencyColl.find({ "patient.username": username }).toArray();
     if (!emergency) {
       return res.status(404).json({
         success: false,
@@ -507,7 +541,7 @@ export const getAssignedEmergency = async (req: Request, res: Response) => {
       });
     }
 
-    const emergencyColl = await getCollection<IEmergency>("Emergency", hospitalId.toString());
+    const emergencyColl = await getCollection<IEmergency>("Emergency", null);
 
 
     const emergency = await emergencyColl.findOne({
@@ -571,7 +605,7 @@ export const updateEmergencyStatus = async (req: Request, res: Response) => {
       });
     }
 
-    const emergencyCol = await getCollection<IEmergency>("Emergency", hospitalId.toString());
+    const emergencyCol = await getCollection<IEmergency>("Emergency", null);
     const currentEmergency = await emergencyCol.findOne({ emergencyId: emergencyId.toString() });
 
     if (!currentEmergency) {
@@ -638,7 +672,7 @@ export const deleteEmergency = async (req: Request, res: Response) => {
       });
     }
 
-    const emergencyCol = await getCollection<IEmergency>("Emergency", hospitalId.toString());
+    const emergencyCol = await getCollection<IEmergency>("Emergency", null);
     const emergency = await emergencyCol.findOne({ emergencyId: emergencyId.toString() });
 
     if (!emergency) {
@@ -710,7 +744,7 @@ export const createEmergency = async (req: Request, res: Response) => {
       });
     }
 
-    const emergencyCol = await getCollection<IEmergency>("Emergency", hospitalId);
+    const emergencyCol = await getCollection<IEmergency>("Emergency", null);
     const employeeCol = await getCollection<IEmployee>("Employee", hospitalId);
 
     // If specific assignments are provided, validate them
@@ -856,24 +890,54 @@ export const createEmergency = async (req: Request, res: Response) => {
       finalAmbulanceNumber = availableAmbulance;
     }
 
-    const emergency: IEmergency = {
-      hospitalId,
-      emergencyId,
-      emergencyRoomId: generateEmergencyRoomId(hospitalId),
-      emergencyType,
-      emergencyDescription,
-      emergencyLocation,
-      emergencyTime,
-      patient,
-      status: EStatus.CREATED,
-      completedTime: "",
-      creatorId,
-      paramedicId: finalParamedicId,
-      driverId: finalDriverId,
-      ambulanceNumber: finalAmbulanceNumber
-    };
+    const createdEmergency = await emergencyCol.findOne({ emergencyId });
 
-    await emergencyCol.insertOne(emergency);
+    let emergency;
+
+    if (createdEmergency) {
+      emergency = await emergencyCol.findOneAndUpdate(
+        {
+          emergencyId
+        },
+        {
+          $set: {
+            status: EStatus.CREATED,
+            emergencyRoomId: generateEmergencyRoomId(hospitalId),
+            creatorId,
+            paramedicId: finalParamedicId,
+            driverId: finalDriverId,
+            ambulanceNumber: finalAmbulanceNumber
+          }
+        },
+        {
+          returnDocument: "after"
+        }
+      )
+    }
+
+    else {
+      emergency = {
+        hospitalId,
+        emergencyId,
+        emergencyRoomId: generateEmergencyRoomId(hospitalId),
+        emergencyType,
+        emergencyDescription,
+        emergencyLocation,
+        emergencyTime,
+        patient,
+        status: EStatus.CREATED,
+        completedTime: "",
+        creatorId,
+        paramedicId: finalParamedicId,
+        driverId: finalDriverId,
+        ambulanceNumber: finalAmbulanceNumber
+      };
+
+      const result = await emergencyCol.insertOne(emergency);
+
+      emergency = { ...emergency, _id: result.insertedId }
+    }
+
 
     // Update employee availability to 'Occupied'
     if (finalParamedicId) {
@@ -955,7 +1019,7 @@ export const getAvailableResources = async (req: Request, res: Response) => {
 
     // Get available ambulances
     const hospital = await hospitalCol.findOne({ hospitalId: hospitalId.toString() });
-    const emergencyCol = await getCollection<IEmergency>("Emergency", hospitalId.toString());
+    const emergencyCol = await getCollection<IEmergency>("Emergency", null);
 
     let availableAmbulances: string[] = [];
     if (hospital?.ambulance) {
