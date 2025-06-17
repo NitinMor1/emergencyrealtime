@@ -391,7 +391,11 @@ export const getEmergency = async (req: Request, res: Response) => {
     const emergencyColl = await getCollection<IEmergency>("Emergency", null);
 
     if (emergencyId) {
-      const emergency = await emergencyColl.findOne({ emergencyId: emergencyId.toString() });
+      const emergency = await emergencyColl.findOne({
+        emergencyId: emergencyId.toString(),
+        status: EStatus.CREATED
+
+      });
       if (!emergency) {
         return res.status(404).json({
           success: false,
@@ -438,7 +442,7 @@ export const getEmergency = async (req: Request, res: Response) => {
         }
       });
     }
-    const emergencies = await emergencyColl.find({}).toArray();
+    const emergencies = await emergencyColl.find({ status: EStatus.CREATED }).toArray();
 
     const employeeCol = await getCollection<IEmployee>("Employee", hospitalId.toString());
     const emergenciesWithDetails = await Promise.all(
