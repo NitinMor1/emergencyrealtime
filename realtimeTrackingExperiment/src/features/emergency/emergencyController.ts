@@ -494,11 +494,11 @@ export const getEmergency = async (req: Request, res: Response) => {
   }
 };
 
-export const getEmergencyForME = async (req: Request, res: Response) => {
+export const getAllEmergency = async (req: Request, res: Response) => {
   try {
-    const { username } = req.query;
+    const { hospitalId } = req.query;
 
-    if (!username) {
+    if (!hospitalId) {
       return res.status(400).json({
         success: false,
         message: "Hospital ID is required"
@@ -506,64 +506,63 @@ export const getEmergencyForME = async (req: Request, res: Response) => {
     }
 
     const emergencyColl = await getCollection<IEmergency>("Emergency", null);
+    const emergencyList = await emergencyColl.find({ hospitalId }).toArray();
 
-    const emergency = await emergencyColl.find({ "patient.username": username }).toArray();
-
-    if (!emergency || emergency.length == 0) {
+    if (!emergencyList.length) {
       return res.status(404).json({
         success: false,
-        message: "Emergency not found"
+        message: "No emergency found"
       });
     }
 
+    // Collect all unique paramedic and driver usernames
+    const employeeUsernames = new Set<string>();
+    for (const e of emergencyList) {
+      if (e.paramedicId) employeeUsernames.add(e.paramedicId);
+      if (e.driverId) employeeUsernames.add(e.driverId);
+    }
 
-    const data = [];
+    // Fetch all employees in one go
+    const employeeColl = await getCollection<IEmployee>("Employee", hospitalId as string);
+    const employees = await employeeColl
+      .find({ "ContactDetails.username": { $in: Array.from(employeeUsernames) } })
+      .toArray();
 
-    for (let e of emergency) {
+    // Create lookup map
+    const employeeMap = new Map(
+      employees.map(emp => [emp.ContactDetails.username, emp])
+    );
 
-      let assignedParamedic = null;
-      let assignedDriver = null;
+    // Build response
+    const data = emergencyList.map(e => {
+      const paramedic = employeeMap.get(e.paramedicId ?? "");
+      const driver = employeeMap.get(e.driverId ?? "");
 
-      if (e.paramedicId && e.driverId && e.ambulanceNumber) {
-        const employeeColl = await getCollection<IEmployee>("Employee", e.hospitalId);
-        assignedParamedic = await employeeColl.findOne(
-          {
-            "ContactDetails.username": e.paramedicId
-          },
-        )
-
-        assignedDriver = await employeeColl.findOne(
-          {
-            "ContactDetails.username": e.driverId
-          },
-        )
-      }
-
-      const temp = {
+      return {
         ...e,
         assignedResources: {
           paramedic: {
-            username: assignedParamedic?.ContactDetails.username || "",
-            name: assignedParamedic?.ContactDetails.name || "",
-            employeeId: assignedParamedic?.ContactDetails.employeeId || "",
-            phoneNumber: assignedParamedic?.ContactDetails.phoneNumber || ""
+            username: paramedic?.ContactDetails.username || "",
+            name: paramedic?.ContactDetails.name || "",
+            employeeId: paramedic?.ContactDetails.employeeId || "",
+            phoneNumber: paramedic?.ContactDetails.phoneNumber || ""
           },
           driver: {
-            username: assignedDriver?.ContactDetails.username || "",
-            name: assignedDriver?.ContactDetails.name || "",
-            employeeId: assignedDriver?.ContactDetails.employeeId || "",
-            phoneNumber: assignedDriver?.ContactDetails.phoneNumber || ""
+            username: driver?.ContactDetails.username || "",
+            name: driver?.ContactDetails.name || "",
+            employeeId: driver?.ContactDetails.employeeId || "",
+            phoneNumber: driver?.ContactDetails.phoneNumber || ""
           },
           ambulance: e.ambulanceNumber || ""
         }
       };
-      data.push(temp);
-    }
+    });
 
     return res.status(200).json({
       success: true,
-      data: data
+      data
     });
+
   } catch (error) {
     console.error("Error fetching emergency:", error);
     return res.status(500).json({
@@ -571,7 +570,94 @@ export const getEmergencyForME = async (req: Request, res: Response) => {
       message: "Internal server error"
     });
   }
-}
+};
+
+export const getEmergencyForME = async (req: Request, res: Response) => {
+  try {
+    const { username } = req.query;
+
+    if (!username) {
+      return res.status(400).json({
+        success: false,
+        message: "Username is required"
+      });
+    }
+
+    const emergencyColl = await getCollection<IEmergency>("Emergency", null);
+    const emergencyList = await emergencyColl.find({ "patient.username": username }).toArray();
+
+    if (!emergencyList.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No emergency found"
+      });
+    }
+
+    // Map to group emergencies by hospitalId
+    const hospitalMap = new Map<string, Set<string>>();
+
+    for (const e of emergencyList) {
+      if (e.hospitalId && (e.paramedicId || e.driverId)) {
+        if (!hospitalMap.has(e.hospitalId)) {
+          hospitalMap.set(e.hospitalId, new Set());
+        }
+        if (e.paramedicId) hospitalMap.get(e.hospitalId)!.add(e.paramedicId);
+        if (e.driverId) hospitalMap.get(e.hospitalId)!.add(e.driverId);
+      }
+    }
+
+    // Fetch all employees hospital-wise in batch
+    const employeeMaps = new Map<string, Map<string, IEmployee>>();
+
+    for (const [hospitalId, usernamesSet] of hospitalMap.entries()) {
+      const employeeColl = await getCollection<IEmployee>("Employee", hospitalId);
+      const employees = await employeeColl
+        .find({ "ContactDetails.username": { $in: Array.from(usernamesSet) } })
+        .toArray();
+
+      const empMap = new Map(employees.map(emp => [emp.ContactDetails.username, emp]));
+      employeeMaps.set(hospitalId, empMap as Map<string, IEmployee>);
+    }
+
+    const data = emergencyList.map(e => {
+      const employeeMap = employeeMaps.get(e.hospitalId || "") || new Map();
+      const paramedic = employeeMap.get(e.paramedicId || "");
+      const driver = employeeMap.get(e.driverId || "");
+
+      return {
+        ...e,
+        assignedResources: {
+          paramedic: {
+            username: paramedic?.ContactDetails.username || "",
+            name: paramedic?.ContactDetails.name || "",
+            employeeId: paramedic?.ContactDetails.employeeId || "",
+            phoneNumber: paramedic?.ContactDetails.phoneNumber || ""
+          },
+          driver: {
+            username: driver?.ContactDetails.username || "",
+            name: driver?.ContactDetails.name || "",
+            employeeId: driver?.ContactDetails.employeeId || "",
+            phoneNumber: driver?.ContactDetails.phoneNumber || ""
+          },
+          ambulance: e.ambulanceNumber || ""
+        }
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data
+    });
+
+  } catch (error) {
+    console.error("Error fetching emergency:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+};
+
 
 export const getAssignedEmergency = async (req: Request, res: Response) => {
   try {
@@ -588,7 +674,8 @@ export const getAssignedEmergency = async (req: Request, res: Response) => {
 
 
     const emergency = await emergencyColl.findOne({
-      paramedicId: username
+      paramedicId: username,
+      status: EStatus.CREATED
     });
 
     if (!emergency) {
