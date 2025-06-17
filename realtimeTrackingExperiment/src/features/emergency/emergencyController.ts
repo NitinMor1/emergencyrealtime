@@ -456,23 +456,21 @@ export const getEmergency = async (req: Request, res: Response) => {
             : null
         ]);
 
-        const paramedicDetails = paramedic
-          ? {
-            username: paramedic.ContactDetails.username,
-            name: paramedic.ContactDetails.name,
-            employeeId: paramedic.ContactDetails.employeeId,
-            phoneNumber: paramedic.ContactDetails.phoneNumber
-          }
-          : null;
+        const paramedicDetails = {
+          username: paramedic?.ContactDetails.username || "",
+          name: paramedic?.ContactDetails.name || "",
+          employeeId: paramedic?.ContactDetails.employeeId || "",
+          phoneNumber: paramedic?.ContactDetails.phoneNumber || ""
+        }
 
-        const driverDetails = driver
-          ? {
-            username: driver.ContactDetails.username,
-            name: driver.ContactDetails.name,
-            employeeId: driver.ContactDetails.employeeId,
-            phoneNumber: driver.ContactDetails.phoneNumber
-          }
-          : null;
+
+        const driverDetails = {
+          username: driver?.ContactDetails.username || "",
+          name: driver?.ContactDetails.name || "",
+          employeeId: driver?.ContactDetails.employeeId || "",
+          phoneNumber: driver?.ContactDetails.phoneNumber || ""
+        }
+
 
         return {
           ...emergency,
@@ -486,11 +484,6 @@ export const getEmergency = async (req: Request, res: Response) => {
       success: true,
       data: emergenciesWithDetails
     });
-
-    // return res.status(200).json({
-    //   success: true,
-    //   data: emergencies
-    // });
 
   } catch (error) {
     console.error("Error fetching emergency:", error);
