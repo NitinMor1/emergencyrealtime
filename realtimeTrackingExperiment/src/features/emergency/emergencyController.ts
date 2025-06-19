@@ -6,6 +6,7 @@ import { IEmployee, IADMIN } from "../resource/HRMS/hrModel";
 import { v4 as uuidv4 } from "uuid";
 import { param } from "express-validator";
 import { addEmployee } from "features/resource/HRMS/hrContoller";
+import { generateEmergencyId } from "../../utils/webSockets/core/clientManager";
 
 // Helper function to generate room id
 export const generateEmergencyRoomId = (hospitalId: string): string => {
@@ -166,7 +167,7 @@ export const createPartialEmergency = async (req: Request, res: Response) => {
     else {
       emergency = {
         hospitalId,
-        emergencyId,
+        emergencyId: emergencyId && emergencyId.trim() ? emergencyId.trim() : generateEmergencyId(),
         emergencyRoomId: generateEmergencyRoomId(hospitalId),
         emergencyType,
         emergencyDescription,
@@ -1048,7 +1049,7 @@ export const createEmergency = async (req: Request, res: Response) => {
     else {
       emergency = {
         hospitalId,
-        emergencyId,
+        emergencyId: emergencyId && emergencyId.trim() ? emergencyId.trim() : generateEmergencyId(),
         emergencyRoomId: generateEmergencyRoomId(hospitalId),
         emergencyType,
         emergencyDescription,
